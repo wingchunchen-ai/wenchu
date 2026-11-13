@@ -29,8 +29,11 @@ function showRecommend() {
     fetch('/daily_recommend')
       .then(r => r.json())
       .then(data => {
-        localStorage.setItem('recommend_date', today);
-        localStorage.setItem('recommend_data', JSON.stringify(data));
+        if (data.recipes.length > 0) {
+          localStorage.setItem('recommend_date', today);
+          localStorage.setItem('recommend_data', JSON.stringify(data));
+        }
+
         renderRecommend(data);
       });
   }
@@ -40,7 +43,11 @@ function renderRecommend(data) {
   const list = document.getElementById('recommend-list');
   list.innerHTML = '';
   if (data.recipes.length === 0) {
+  if (data.need_profile) {
+  list.innerHTML = '<p>还没填过家里有的锅具，<a href="/profile" style="color: #FF8C00;">先去填一下</a>，稳厨每天给你推能做的菜。</p>';
+  } else {
     list.innerHTML = '<p>今天没有符合你锅具的菜</p>';
+  }
     return;
   }
   data.recipes.forEach(r => {

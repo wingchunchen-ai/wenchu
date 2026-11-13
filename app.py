@@ -364,14 +364,14 @@ def edit_recipe(recipe_id):  # 函数
     return render_template('edit.html', recipe=recipe)  # GET 就显示修改表单
 @app.route('/daily_recommend')
 def daily_recommend():
-    # 没登录或没填画像，先去画像页
+    # # 没登录或没填画像，返回空列表加 need_profile 标记，让弹窗显示引导语
     user_id = session.get('user_id')
     if not user_id:
-        return redirect('/profile')
+        return {'recipes': [], 'need_profile': True}
     db = get_db()
     user = db.execute('SELECT cookware FROM users WHERE id = ?', (user_id,)).fetchone()
     if not user or not user['cookware']:
-        return redirect('/profile')
+        return {'recipes': [], 'need_profile': True}
     # 用户的锅具列表
     my_cookware = [c.strip() for c in user['cookware'].split(',') if c.strip()]
     # 只找步骤里用了这些锅具的菜，排除被质疑的，随机取最多 3 道
