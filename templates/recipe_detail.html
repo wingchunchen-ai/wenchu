@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>{{ recipe['name'] }}</title>
+</head>
+<body>
+    <h1>{{ recipe['name'] }}</h1>
+    {% if recipe['image'] %}<img src="{{ recipe['image'] }}" style="width:100%; max-width:400px; border-radius:12px;">{% endif %}
+    {% if session.user_id == recipe.user_id %}
+    <a href="/edit/{{ recipe.id }}">编辑</a>
+    {% endif %}
+    <p>{{ recipe['description'] }}</p>
+    <!-- 大概时间：数据库里 time_minutes 列的分钟数 -->
+<p>大概时间：{{ recipe['time_minutes'] }} 分钟</p>
+<p>小贴士：熟练的话会更快哦。</p>
+<!-- 做菜前先备齐：整道菜要用的全部食材（数据库 ingredients_list 列） -->
+{% if recipe['ingredients_list'] %}
+<p>要用的食材：{{ recipe['ingredients_list'] }}</p>
+{% endif %}
+<!-- 做菜前先备齐：整道菜要用的全部厨具（数据库 tools_list 列） -->
+{% if recipe['tools_list'] %}
+<p>要用的厨具：{{ recipe['tools_list'] }}</p>
+{% endif %}
+    <ol>
+        {% for step in steps %}
+        <li>
+            <h3>{{ step['title'] }}</h3>
+            <p>做什么：{{ step['action'] }}</p>
+            <p>工具：{{ step['tools'] }}</p>
+            <p>工具怎么用：{{ step['tool_usage'] }}</p>
+            <p>安全提示：{{ step['safety_tip'] }}</p>
+        </li>
+        {% endfor %}
+    </ol>
+    <!-- 质疑 -->
+<h3>觉得这道菜有问题？</h3>
+<form action="/question" method="post">
+  <input type="hidden" name="recipe_id" value="{{ recipe['id'] }}">
+  <!-- 质疑内容输入框 -->
+  <textarea name="question_text" rows="3" placeholder="比如：第三步说大火，但我家灶火大，会不会糊？" required></textarea>
+  <!-- 提交按钮：点一下就把表单数据发到 /question -->
+  <button type="submit">提交质疑</button>
+</form>
+<p>
+<button onclick="vote({{ recipe['id'] }}, 'like')">👍 好吃</button>
+<button onclick="vote({{ recipe['id'] }}, 'dislike')">👎 不好吃</button>
+</p>
+<p><button onclick="history.back()">← 返回</button></p>
+<script>
+function vote(recipeId, v) {
+fetch('/vote', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({recipe_id: recipeId, vote: v})
+}).then(() => location.reload());
+}
+</script>
+</body>
+</html>
