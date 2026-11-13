@@ -40,7 +40,7 @@
 <form action="/question" method="post">
   <input type="hidden" name="recipe_id" value="{{ recipe['id'] }}">
   <!-- 质疑内容输入框 -->
-  <textarea name="question_text" rows="3" placeholder="比如：第三步说大火，但我家灶火大，会不会糊？" required></textarea>
+  <textarea name="question_text" rows="3" placeholder="比如：第三步的大火收汁我做糊了，这一步是不是该改中小火？" required></textarea>
   <!-- 提交按钮：点一下就把表单数据发到 /question -->
   <button type="submit">提交质疑</button>
 </form>
