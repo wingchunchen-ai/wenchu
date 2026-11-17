@@ -1,0 +1,246 @@
+"""稳厨主路径测试：可以反复跑，不会弄脏交付库。
+
+用法（在项目根目录）：
+    pip install -r requirements.txt
+    python tests/test_main_path.py
+
+做法：把 厨房数据库.sqlite3 复制到临时文件夹，用环境变量 WENCHU_DB 指向副本，
+上传的图片也存到临时文件夹；跑完自动删掉。全部通过时退出码为 0。
+"""
+import hashlib
+import os
+import re
+import shutil
+import sqlite3
+import sys
+import tempfile
+from io import BytesIO
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REAL_DB = os.path.join(ROOT, '厨房数据库.sqlite3')
+TMP = tempfile.mkdtemp(prefix='wenchu-test-')
+TEST_DB = os.path.join(TMP, 'test.sqlite3')
+shutil.copy(REAL_DB, TEST_DB)
+os.environ['WENCHU_DB'] = TEST_DB
+os.environ['WENCHU_UPLOAD_DIR'] = os.path.join(TMP, 'uploads')
+sys.path.insert(0, ROOT)
+
+real_db_hash = hashlib.md5(open(REAL_DB, 'rb').read()).hexdigest()
+
+import app as wenchu  # noqa: E402  导入时会对临时库跑 init_db
+
+app = wenchu.app
+app.config['TESTING'] = True
+
+passed = 0
+failed = []
+
+
+def check(name, ok, detail=''):
+    global passed
+    if ok:
+        passed += 1
+        print(f'  [通过] {name}')
+    else:
+        failed.append(name)
+        print(f'  [失败] {name} {detail}')
+
+
+def text(resp):
+    return resp.get_data(as_text=True)
+
+
+def recipe_links(html):
+    return re.findall(r'href="/recipe/(\d+)">', html)
+
+
+PNG = b'\x89PNG\r\n\x1a\n' + b'\x00' * 64
+
+try:
+    c = app.test_client()
+
+    print('1. 看菜谱（没填画像也能看）')
+    r = c.get('/')
+    check('首页能打开且有标题', r.status_code == 200 and '<title>稳厨' in text(r))
+    r = c.get('/all')
+    check('全部菜谱 200，12 道现成菜都在', r.status_code == 200 and len(set(recipe_links(text(r)))) == 12)
+    r = c.get('/recipes')
+    check('放心菜谱不再跳去画像页', r.status_code == 200 and len(set(recipe_links(text(r)))) == 12, r.status_code)
+
+    print('2. 搜索 / 分类 / 时间')
+    r = c.get('/recipes?q=鸡')
+    ids = set(recipe_links(text(r)))
+    check('搜「鸡」只出带鸡的菜', r.status_code == 200 and ids and ids <= {'1', '7'}, ids)
+    r = c.get('/all?category=快手小炒')
+    check('全部菜谱也能按分类筛（快手小炒 6 道）', r.status_code == 200 and len(set(recipe_links(text(r)))) == 6)
+    r = c.get('/recipes?time=15分钟以内')
+    check('按时间筛 15 分钟以内', r.status_code == 200 and set(recipe_links(text(r))) == {'5', '9', '12'}, set(recipe_links(text(r))))
+    r = c.get('/recipes?q=不存在的菜')
+    check('搜不到时有空状态提示', '没有找到符合条件的菜谱' in text(r))
+
+    print('3. 详情')
+    r = c.get('/recipe/1')
+    h = text(r)
+    check('详情 200，含时间/食材/厨具/步骤', r.status_code == 200 and '30 分钟' in h and '要用的食材' in h and '要用的厨具' in h and '改刀备料' in h)
+    check('详情没有 None、没有开发注释', 'None' not in h and '<!--' not in h)
+    r = c.get('/recipe/9999')
+    check('不存在的菜给中文 404', r.status_code == 404 and '不存在' in text(r))
+
+    print('4. 没画像时点赞 / 质疑给中文原因')
+    r = c.post('/vote', json={'recipe_id': 1, 'vote': 'like'})
+    check('未登录点赞 401 + 中文提示', r.status_code == 401 and '画像' in r.get_json()['message'])
+    r = c.post('/question', data={'recipe_id': 1, 'question_text': '测试'}, follow_redirects=True)
+    check('未登录质疑回到详情并提示', r.status_code == 200 and '请先保存厨房画像' in text(r))
+
+    print('5. 画像保存 + 推荐')
+    r = c.post('/profile', data={'nickname': '', 'cookware': ['炒锅']}, follow_redirects=True)
+    check('昵称为空不保存并提示', '请先填写昵称' in text(r))
+    r = c.post('/profile', data={'nickname': '审读测试', 'cookware': ['炒锅', '平底锅'], 'avatar': '🐱'}, follow_redirects=True)
+    h = text(r)
+    check('画像保存成功并提示', r.status_code == 200 and '画像已保存' in h and '审读测试' in h and '🐱' in h)
+    check('画像页有「去看适合我的菜」入口', '/recommend' in h and '去看适合我的菜' in h)
+    r = c.get('/profile?edit=1')
+    check('再进编辑页，锅具保持勾选', text(r).count('checked') >= 3)
+    r = c.get('/recommend')
+    h = text(r)
+    check('推荐页显示能做 / 缺锅具', r.status_code == 200 and '能做的' in h and '缺锅具' in h and '蛋炒饭' in h)
+    r = c.get('/daily_recommend')
+    data = r.get_json()
+    check('首页今日推荐接口有菜', r.status_code == 200 and len(data['recipes']) > 0 and not data['need_profile'])
+
+    print('6. 上传：空表单 / 重名 / 坏图片 都不 500')
+    r = c.post('/upload', data={'name': '', 'step_action': ''})
+    check('空表单被拦下（400 + 中文原因）', r.status_code == 400 and '请填写菜名' in text(r))
+    r = c.post('/upload', data={'name': '蛋炒饭', 'template_id': '3', 'step_action': ['炒']})
+    check('和现成菜重名被拦下', r.status_code == 400 and '已经存在' in text(r))
+    r = c.post('/upload', data={'name': '坏图测试', 'template_id': '3', 'step_action': ['炒'],
+                                'image': (BytesIO(b'not an image'), 'a.jpg')}, content_type='multipart/form-data')
+    check('不是图片的文件被拦下', r.status_code == 400 and '不是图片' in text(r))
+    r = c.post('/upload', data={'name': '时间乱填', 'template_id': '3', 'step_action': ['炒'], 'time_minutes': 'abc'})
+    check('时间不是数字被拦下', r.status_code == 400 and '整数' in text(r))
+    r = c.post('/upload', data={'name': '漏写做什么', 'template_id': '3', 'step_title': ['一', '二'], 'step_action': ['炒', '']})
+    check('有一步没写「做什么」被拦下', r.status_code == 400 and '做什么' in text(r))
+    con = sqlite3.connect(TEST_DB)
+    check('以上失败上传都没写进库', con.execute('SELECT COUNT(*) FROM recipes').fetchone()[0] == 12)
+    con.close()
+
+    print('7. 上传一道完整的菜')
+    form = {
+        'name': '番茄炒蛋（测试）', 'description': '酸甜下饭的家常菜', 'template_id': '3', 'time_minutes': '12',
+        'ingredients_list': '番茄 2 个、鸡蛋 3 个、盐、糖、油', 'tools_list': '平底锅、碗、锅铲',
+        'summary_safety_tip': '热油下锅时手离远一点',
+        'step_title': ['打蛋', '炒蛋', '炒番茄'],
+        'step_action': ['鸡蛋打散加一点盐', '热锅下油，倒蛋液炒到凝固盛出', '番茄炒出汁，倒回鸡蛋翻匀'],
+        'step_tools': ['碗、筷子', '平底锅、锅铲', '平底锅、锅铲'],
+        'step_tool_usage': ['顺一个方向搅', '中火', '中小火'],
+        'step_safety_tip': ['', '油热了再下蛋，小心溅油', '番茄出汁会溅，盖一下锅盖'],
+        'image': (BytesIO(PNG), '番茄炒蛋.png'),
+    }
+    r = c.post('/upload', data=form, content_type='multipart/form-data')
+    loc = r.headers.get('Location', '')
+    check('上传成功跳到新菜详情', r.status_code == 302 and loc.startswith('/recipe/'), (r.status_code, loc))
+    new_id = loc.rsplit('/', 1)[-1]
+    r = c.get(loc)
+    h = text(r)
+    check('详情显示「上传成功」', '上传成功' in h)
+    check('详情有 3 步、时间、食材、厨具、分类', all(k in h for k in ['炒番茄', '12 分钟', '番茄 2 个', '平底锅、碗、锅铲', '快手小炒']))
+    img = re.search(r'src="(/uploads/[0-9a-f]{32}\.png)"', h)
+    check('图片用随机文件名保存并在详情显示', bool(img))
+    if img:
+        check('图片网址能打开', c.get(img.group(1)).status_code == 200)
+    check('上传者能看到编辑入口', f'/edit/{new_id}' in h)
+    r = c.get('/recipes?category=快手小炒')
+    check('新菜出现在所选分类里', new_id in recipe_links(text(r)))
+    r = c.get('/recipes?time=15分钟以内')
+    check('新菜能被时间筛选到', new_id in recipe_links(text(r)))
+
+    print('8. 编辑自己的菜')
+    r = c.get(f'/edit/{new_id}')
+    check('编辑页带出原来的步骤', r.status_code == 200 and '炒番茄' in text(r))
+    edit_form = dict(form)
+    edit_form.pop('image')
+    edit_form['time_minutes'] = '15'
+    edit_form['step_title'] = ['打蛋', '一起炒']
+    edit_form['step_action'] = ['鸡蛋打散', '先炒蛋再炒番茄']
+    for k in ['step_tools', 'step_tool_usage', 'step_safety_tip']:
+        edit_form[k] = ['', '']
+    r = c.post(f'/edit/{new_id}', data=edit_form, content_type='multipart/form-data', follow_redirects=True)
+    h = text(r)
+    check('编辑保存成功，步骤换成 2 步，旧图保留', '修改已保存' in h and '<h3>一起炒</h3>' in h and '<h3>炒番茄</h3>' not in h and '15 分钟' in h and '/uploads/' in h)
+
+    print('9. 点赞 / 质疑 / 站队')
+    r = c.post('/vote', json={'recipe_id': 1, 'vote': 'like'})
+    check('点赞成功', r.status_code == 200 and r.get_json()['ok'])
+    check('列表显示好评率', '好评率 100%（1人评价）' in text(c.get('/all')))
+    r = c.post('/vote', json={'recipe_id': 'abc', 'vote': 'like'})
+    check('乱传菜 id 不 500', r.status_code == 400)
+    r = c.post('/question', data={'recipe_id': 1, 'question_text': ''}, follow_redirects=True)
+    check('空质疑被拦下', '不能是空的' in text(r))
+    r = c.post('/question', data={'recipe_id': 1, 'question_text': '可乐加太多会溢锅吗？'})
+    qloc = r.headers.get('Location', '')
+    check('质疑提交后跳到站队页', r.status_code == 302 and qloc.startswith('/question/'))
+    r = c.get('/questions')
+    check('质疑区能点进站队页', qloc in text(r))
+    check('放心菜谱里不再有被质疑的菜', '1' not in recipe_links(text(c.get('/recipes'))))
+    check('详情页列出已有质疑', qloc in text(c.get('/recipe/1')))
+    qid = qloc.rsplit('/', 1)[-1]
+    r = c.post('/verdict', data={'question_id': qid, 'verdict': '确实有错'}, follow_redirects=True)
+    check('站队成功并显示票数', '确实有错：1票' in text(r) and '已记下你的站队' in text(r))
+    r = c.post('/verdict', data={'question_id': qid, 'verdict': '确实有错'}, follow_redirects=True)
+    check('再点一次撤回', '已撤回' in text(r) and '还没有人表态' in text(r))
+    r = c.post('/verdict', data={'question_id': qid, 'verdict': '乱写'})
+    check('乱写站队值不 500', r.status_code == 400)
+
+    print('10. 安全：XSS 与权限')
+    xss = '<img src=x onerror=alert(1)>'
+    r = c.post('/upload', data={'name': xss, 'template_id': '3', 'step_action': ['炒'], 'step_tools': ['炒锅']})
+    xid = r.headers['Location'].rsplit('/', 1)[-1]
+    h = text(c.get(f'/recipe/{xid}'))
+    check('详情里菜名被转义', xss not in h and '&lt;img' in h)
+    idx = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
+    check('首页推荐不再用 innerHTML 拼菜名', "'</a>" not in idx and 'a.textContent = r.name' in idx)
+    names = [x['name'] for x in c.get('/daily_recommend').get_json()['recipes']]
+    check('推荐接口原样返回菜名（由前端当文字显示）', all(isinstance(n, str) for n in names))
+    other = app.test_client()
+    other.post('/profile', data={'nickname': '路人', 'cookware': ['炒锅']})
+    check('别人不能改我的菜', other.get(f'/edit/{new_id}').status_code == 403)
+    check('别人不能删我的菜', other.post(f'/delete/{new_id}').status_code == 403)
+    owner = app.test_client()
+    with owner.session_transaction() as s:
+        s['user_id'] = 5  # 现成菜在库里记在 5 号用户名下
+    r = owner.post('/delete/1')
+    check('现成菜连原发布者也删不掉', r.status_code == 403 and '不能删除' in text(r))
+    r = c.post(f'/delete/{xid}', follow_redirects=True)
+    check('自己能删自己的菜', '已删除' in text(r) and c.get(f'/recipe/{xid}').status_code == 404)
+
+    print('11. 旧库兼容：users 没有 avatar 列也能保存画像')
+    old_db = os.path.join(TMP, 'old.sqlite3')
+    shutil.copy(REAL_DB, old_db)
+    con = sqlite3.connect(old_db)
+    con.execute('ALTER TABLE users DROP COLUMN avatar')
+    con.execute('ALTER TABLE recipes DROP COLUMN is_official')
+    con.commit()
+    con.close()
+    saved_path = wenchu.DB_PATH
+    wenchu.DB_PATH = old_db
+    try:
+        wenchu.init_db()
+        c2 = app.test_client()
+        r = c2.post('/profile', data={'nickname': '旧库用户', 'cookware': ['蒸锅'], 'avatar': '🐼'}, follow_redirects=True)
+        check('旧库启动后自动补列，画像保存成功', r.status_code == 200 and '画像已保存' in text(r))
+        con = sqlite3.connect(old_db)
+        check('旧库现成菜自动标成官方菜', con.execute('SELECT SUM(is_official) FROM recipes').fetchone()[0] == 12)
+        con.close()
+    finally:
+        wenchu.DB_PATH = saved_path
+
+    print('12. 收尾')
+    check('交付库一个字节都没变', hashlib.md5(open(REAL_DB, 'rb').read()).hexdigest() == real_db_hash)
+finally:
+    shutil.rmtree(TMP, ignore_errors=True)
+
+print()
+print(f'通过 {passed} 项，失败 {len(failed)} 项')
+if failed:
+    print('失败的项：' + '；'.join(failed))
+sys.exit(1 if failed else 0)
