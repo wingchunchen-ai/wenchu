@@ -176,3 +176,26 @@ a:hover {
   color: #6d5a52;
   font-size: 16px;
 }
+/* 上传 / 编辑表单 */
+textarea, select, input[type="number"] {
+  font-size: 18px;
+  padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+fieldset.step {
+  border: 1px solid #d8c7a8;
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 8px 16px;
+  background: #fffdf7;
+}
+.preview {
+  max-width: 900px;
+  margin: 16px auto;
+  padding: 16px 20px;
+  border: 2px dashed #FF7A45;
+  border-radius: 12px;
+  background: #fffdf7;
+}

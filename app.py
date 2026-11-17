@@ -1,10 +1,16 @@
-from flask import Flask, render_template, request, session, redirect, flash#引入网站和显示页面的功能，flash 用来给下一页带一句提示
+from flask import Flask, render_template, request, session, redirect, flash, send_from_directory#引入网站和显示页面的功能，flash 用来给下一页带一句提示
 import os#拼路径、读环境变量
+import uuid#给上传的图片起一个不会重名的文件名
 import sqlite3#引入sql数据库
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get('WENCHU_DB', os.path.join(BASE_DIR, '厨房数据库.sqlite3'))
+# 上传的菜品图存这里（默认 static/uploads），网址统一是 /uploads/文件名
+UPLOAD_DIR = os.environ.get('WENCHU_UPLOAD_DIR', os.path.join(BASE_DIR, 'static', 'uploads'))
+# 现成的 12 道菜：标记成官方菜，网页上不能被删掉
+OFFICIAL_NAMES = ['可乐鸡翅', '芥末虾球', '巧克力慕斯蛋糕', '干锅花菜', '熔岩吐司', '生啫鱿鱼',
+                  '秘制土豆鸡腿饭', '龙虾面', '赛螃蟹', '爆炒猪肝', '奶油蘑菇意面', '蛋炒饭']
 def get_db():#定义函数get_db
     conn = sqlite3.connect(DB_PATH, timeout=10)#连接sqlite3，最多等 10 秒，别一碰就“库被锁”
     conn.row_factory = sqlite3.Row#按照列名取数据
@@ -25,6 +31,16 @@ def init_db():
         user_cols = [r['name'] for r in conn.execute('PRAGMA table_info(users)')]
         if 'avatar' not in user_cols:
             conn.execute('ALTER TABLE users ADD COLUMN avatar TEXT')
+        # recipes 表是作者提前建好的；旧库可能缺后来加的列，缺哪列补哪列
+        recipe_cols = [r['name'] for r in conn.execute('PRAGMA table_info(recipes)')]
+        for col, col_type in [('time_minutes', 'INTEGER'), ('image', 'TEXT'), ('user_id', 'INTEGER'),
+                              ('tools_list', 'TEXT'), ('ingredients_list', 'TEXT'),
+                              ('is_official', 'INTEGER DEFAULT 0')]:
+            if recipe_cols and col not in recipe_cols:
+                conn.execute(f'ALTER TABLE recipes ADD COLUMN {col} {col_type}')
+                if col == 'is_official':  # 第一次加这列时，把现成的 12 道菜标成官方菜
+                    marks = ','.join('?' for _ in OFFICIAL_NAMES)
+                    conn.execute(f'UPDATE recipes SET is_official = 1 WHERE name IN ({marks})', OFFICIAL_NAMES)
         # questions 表：存对菜谱的质疑
         # recipe_id 是被质疑的菜，user_id 是提问的人，question_text 是质疑内容
         # created_at 是提问时间，建表时自动填现在时间，插入时不用写这一列
@@ -59,6 +75,8 @@ def init_db():
 app = Flask(__name__)#创建flask应用
 # 密钥：线上请在环境变量 SECRET_KEY 里设一个长的随机字符串；没设就用演示用的固定字符串
 app.secret_key = os.environ.get('SECRET_KEY', 'wenchu')
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 上传最大 5MB，再大就提示换小图
+ALLOWED_IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 # 时间三档，列表页和筛选共用
 TIME_FILTERS = ['15分钟以内', '15到30分钟', '30分钟以上']
 def current_user():
@@ -326,46 +344,126 @@ def recommend():  # 处理推荐页的函数
     finally:
         conn.close()
     return render_template('recommend.html', need_profile=False, can_make=can_make, cannot_make=cannot_make, user_cookware=my_cookware)
+def get_categories():
+    # 从数据库读 8 个分类，上传和编辑的下拉框用
+    conn = get_db()
+    try:
+        return conn.execute('SELECT template_id, category FROM cooking_categories ORDER BY template_id').fetchall()
+    finally:
+        conn.close()
+def read_recipe_form():
+    # 把上传 / 编辑表单读成 (菜的信息, 步骤列表, 出错原因列表)，两边共用一套检查
+    f = request.form
+    data = {
+        'name': (f.get('name') or '').strip(),
+        'description': (f.get('description') or '').strip(),
+        'template_id': f.get('template_id', type=int),
+        'time_minutes': (f.get('time_minutes') or '').strip(),
+        'ingredients_list': (f.get('ingredients_list') or '').strip(),
+        'tools_list': (f.get('tools_list') or '').strip(),
+        'summary_safety_tip': (f.get('summary_safety_tip') or '').strip(),
+    }
+    titles = f.getlist('step_title')
+    actions = f.getlist('step_action')
+    tools = f.getlist('step_tools')
+    usages = f.getlist('step_tool_usage')
+    tips = f.getlist('step_safety_tip')
+    steps = []
+    for i in range(max(len(titles), len(actions), len(tools), len(usages), len(tips))):
+        def pick(lst):
+            return (lst[i] if i < len(lst) else '').strip()
+        step = {'title': pick(titles), 'action': pick(actions), 'tools': pick(tools),
+                'tool_usage': pick(usages), 'safety_tip': pick(tips)}
+        if any(step.values()):  # 整步都空着的就当没写
+            steps.append(step)
+    errors = []
+    if not data['name']:
+        errors.append('请填写菜名')
+    elif len(data['name']) > 40:
+        errors.append('菜名最多 40 个字')
+    valid_ids = [c['template_id'] for c in get_categories()]
+    if data['template_id'] not in valid_ids:
+        errors.append('请选一个分类')
+    if data['time_minutes']:
+        if not data['time_minutes'].isdigit() or not (1 <= int(data['time_minutes']) <= 1440):
+            errors.append('大概时间请填 1 到 1440 之间的整数（分钟）')
+    if not steps:
+        errors.append('至少写一步做法')
+    elif any(not st['action'] for st in steps):
+        errors.append('每一步都要写「做什么」')
+    data['time_minutes'] = int(data['time_minutes']) if data['time_minutes'].isdigit() else None
+    if not data['summary_safety_tip']:  # 没写整体安全提示，就用第一步的安全提示
+        data['summary_safety_tip'] = next((st['safety_tip'] for st in steps if st['safety_tip']), '')
+    return data, steps, errors
+def save_image(image_file):
+    # 存上传的菜品图，返回 (网址, 出错原因)。没传图返回 (None, None)
+    if not image_file or not image_file.filename:
+        return None, None
+    ext = os.path.splitext(image_file.filename)[1].lower()  # 中文文件名也能拿到后缀
+    if ext not in ALLOWED_IMAGE_EXT:
+        return None, '图片只支持 jpg、png、webp、gif'
+    head = image_file.stream.read(16)  # 看文件开头几个字节，确认真的是图片
+    image_file.stream.seek(0)
+    is_image = (head.startswith(b'\xff\xd8\xff') or head.startswith(b'\x89PNG') or
+                head.startswith(b'GIF8') or (head[:4] == b'RIFF' and head[8:12] == b'WEBP'))
+    if not is_image:
+        return None, '这个文件看起来不是图片，请换一张'
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    filename = uuid.uuid4().hex + ('.jpg' if ext == '.jpeg' else ext)  # 随机文件名，不会互相覆盖
+    image_file.save(os.path.join(UPLOAD_DIR, filename))
+    return '/uploads/' + filename, None
+def remove_image(image_path):
+    # 删掉之前上传的图片文件（只删 /uploads/ 下的，别的不动）
+    if image_path and image_path.startswith('/uploads/'):
+        try:
+            os.remove(os.path.join(UPLOAD_DIR, os.path.basename(image_path)))
+        except OSError:
+            pass
+def insert_steps(conn, recipe_id, steps):
+    # 按顺序写入步骤，step_no 从 1 开始
+    for i, st in enumerate(steps, start=1):
+        conn.execute('INSERT INTO recipe_steps (recipe_id, step_no, title, action, tools, tool_usage, safety_tip) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                     (recipe_id, i, st['title'] or f'第{i}步', st['action'], st['tools'], st['tool_usage'], st['safety_tip']))
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    # 把上传的图片发给浏览器
+    return send_from_directory(UPLOAD_DIR, filename)
 @app.route('/upload', methods=['GET', 'POST'])  # 上传页的网址，GET 显示表单，POST 保存
 def upload():  # 函数
     if request.method == 'POST':  # 如果是提交表单（点上传）
-        name = (request.form.get('name') or '').strip()  # 取菜名输入框的值
-        description = (request.form.get('description') or '').strip()  # 取简介输入框的值
-        step_title = (request.form.get('step_title') or '').strip()  # 取第一步标题输入框的值
-        action = (request.form.get('action') or '').strip()  # 取第一步做什么输入框的值
-        tools = (request.form.get('tools') or '').strip()  # 取第一步工具输入框的值
-        tool_usage = (request.form.get('tool_usage') or '').strip()  # 取工具怎么用输入框的值
-        safety_tip = (request.form.get('safety_tip') or '').strip()  # 取安全提示输入框的值
-        # 后台再检查一次，不能只靠浏览器拦
-        if not name or not action:
-            flash('请至少填写菜名，以及一步「做什么」。')
-            return render_template('upload.html', form=request.form), 400
-        # 处理上传的片图
-        image_file = request.files.get('image')  # 取传上来的图，没传就是 None
-        image_path = None  # 默认没图
-        if image_file and image_file.filename:  # 如果传了图
-            from werkzeug.utils import secure_filename  # 把文件名弄安全
-            upload_dir = os.path.join(BASE_DIR, 'static', 'uploads')  # 图存到 static/uploads 文件夹
-            os.makedirs(upload_dir, exist_ok=True)  # 文件夹不存在就建一个
-            filename = secure_filename(image_file.filename)  # 安全文件名
-            image_file.save(os.path.join(upload_dir, filename))  # 把图存下来
-            image_path = '/static/uploads/' + filename  # 存进数据库的路径
+        data, steps, errors = read_recipe_form()  # 后台再检查一次，不能只靠浏览器拦
+        image_path, image_error = (None, None)
+        if not errors:
+            image_path, image_error = save_image(request.files.get('image'))
+        if image_error:
+            errors.append(image_error)
+        if errors:
+            flash('没能上传：' + '；'.join(errors) + '。')
+            return render_template('upload.html', form=request.form, steps=steps, categories=get_categories()), 400
         conn = get_db()
         try:
-            cursor = conn.execute('INSERT INTO recipes (name, description, template_id, summary_safety_tip, image, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-                                  (name, description, 1, safety_tip, image_path, session.get('user_id')))
+            cursor = conn.execute(
+                '''INSERT INTO recipes (name, description, template_id, summary_safety_tip, image, user_id,
+                   time_minutes, ingredients_list, tools_list, is_official)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)''',
+                (data['name'], data['description'], data['template_id'], data['summary_safety_tip'], image_path,
+                 session.get('user_id'), data['time_minutes'], data['ingredients_list'], data['tools_list']))
             recipe_id = cursor.lastrowid  # 拿到刚插入的这道菜的 id
-            conn.execute('INSERT INTO recipe_steps (recipe_id, step_no, title, action, tools, tool_usage, safety_tip) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                         (recipe_id, 1, step_title or '第一步', action, tools, tool_usage, safety_tip))
+            insert_steps(conn, recipe_id, steps)
             conn.commit()
         except sqlite3.IntegrityError:  # 菜名和已有的重复了
-            flash('这个菜名已经存在，请换一个。')
-            return render_template('upload.html', form=request.form), 400
+            conn.rollback()
+            remove_image(image_path)
+            flash('没能上传：这个菜名已经存在，请换一个。')
+            return render_template('upload.html', form=request.form, steps=steps, categories=get_categories()), 400
         finally:
             conn.close()
-        flash('上传成功！')
+        if session.get('user_id'):
+            flash('上传成功！')
+        else:
+            flash('上传成功！先保存厨房画像再上传，以后就能自己修改和删除这道菜。')
         return redirect(f'/recipe/{recipe_id}')  # 保存完跳到刚传的这道菜
-    return render_template('upload.html', form={})  # 如果是 GET（直接打开），就显示表单
+    return render_template('upload.html', form={}, steps=[], categories=get_categories())  # GET 就显示空表单
 @app.route('/delete/<int:recipe_id>', methods=['POST'])  # 删除菜的路由，只接受 POST
 def delete_recipe(recipe_id):  # 函数，recipe_id 是要删的菜的 id
     if not current_user():
@@ -373,10 +471,12 @@ def delete_recipe(recipe_id):  # 函数，recipe_id 是要删的菜的 id
         return redirect(f'/recipe/{recipe_id}')
     conn = get_db()
     try:
-        recipe = conn.execute('SELECT user_id FROM recipes WHERE id = ?', (recipe_id,)).fetchone()  # 查这道菜是谁传的
+        recipe = conn.execute('SELECT user_id, is_official, image FROM recipes WHERE id = ?', (recipe_id,)).fetchone()  # 查这道菜是谁传的
         if not recipe:
             flash('这道菜已经不在了。')
             return redirect('/all')
+        if recipe['is_official']:  # 现成的官方菜不能在网页上删
+            return render_template('error.html', message='这是稳厨自带的菜谱，不能删除。'), 403
         if recipe['user_id'] != session['user_id']:  # 不是发布者本人
             return render_template('error.html', message='只有发布者能删这道菜。'), 403
         conn.execute('DELETE FROM verdicts WHERE question_id IN (SELECT id FROM questions WHERE recipe_id = ?)', (recipe_id,))
@@ -387,9 +487,10 @@ def delete_recipe(recipe_id):  # 函数，recipe_id 是要删的菜的 id
         conn.commit()
     finally:
         conn.close()
+    remove_image(recipe['image'])
     flash('已删除。')
     return redirect('/all')
-@app.route('/edit/<int:recipe_id>', methods=['GET', 'POST'])  # 修改菜的路由
+@app.route('/edit/<int:recipe_id>', methods=['GET', 'POST'])  # 修改菜的路由，能改的内容和上传一样
 def edit_recipe(recipe_id):  # 函数
     if not current_user():
         flash('请先保存厨房画像。')
@@ -402,22 +503,38 @@ def edit_recipe(recipe_id):  # 函数
         if recipe['user_id'] != session['user_id']:  # 不是发布者本人
             return render_template('error.html', message='只有发布者能改这道菜。'), 403
         if request.method == 'POST':
-            name = (request.form.get('name') or '').strip()
-            description = (request.form.get('description') or '').strip()
-            if not name:
-                flash('菜名不能是空的。')
-                return render_template('edit.html', recipe=recipe), 400
+            data, steps, errors = read_recipe_form()
+            image_path, image_error = (None, None)
+            if not errors:
+                image_path, image_error = save_image(request.files.get('image'))
+            if image_error:
+                errors.append(image_error)
+            if errors:
+                flash('没能保存：' + '；'.join(errors) + '。')
+                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories()), 400
             try:
-                conn.execute('UPDATE recipes SET name = ?, description = ? WHERE id = ?', (name, description, recipe_id))
+                conn.execute('''UPDATE recipes SET name = ?, description = ?, template_id = ?, summary_safety_tip = ?,
+                    time_minutes = ?, ingredients_list = ?, tools_list = ?, image = COALESCE(?, image) WHERE id = ?''',
+                    (data['name'], data['description'], data['template_id'], data['summary_safety_tip'],
+                     data['time_minutes'], data['ingredients_list'], data['tools_list'], image_path, recipe_id))
+                conn.execute('DELETE FROM recipe_steps WHERE recipe_id = ?', (recipe_id,))  # 步骤整组换掉
+                insert_steps(conn, recipe_id, steps)
                 conn.commit()
             except sqlite3.IntegrityError:
-                flash('这个菜名已经存在，请换一个。')
-                return render_template('edit.html', recipe=recipe), 400
+                conn.rollback()
+                remove_image(image_path)
+                flash('没能保存：这个菜名已经存在，请换一个。')
+                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories()), 400
+            if image_path:
+                remove_image(recipe['image'])  # 换了新图，旧图删掉
             flash('修改已保存。')
             return redirect(f'/recipe/{recipe_id}')
+        steps = [dict(r) for r in conn.execute('SELECT title, action, tools, tool_usage, safety_tip FROM recipe_steps WHERE recipe_id = ? ORDER BY step_no', (recipe_id,))]
     finally:
         conn.close()
-    return render_template('edit.html', recipe=recipe)
+    form = dict(recipe)
+    form['time_minutes'] = recipe['time_minutes'] or ''
+    return render_template('edit.html', recipe=recipe, form=form, steps=steps, categories=get_categories())
 @app.route('/daily_recommend')
 def daily_recommend():
     # 没登录或没填锅具，返回空列表加 need_profile 标记，让弹窗显示引导语

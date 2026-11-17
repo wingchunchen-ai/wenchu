@@ -1,0 +1,100 @@
+{# 上传和编辑共用的菜谱表单：和现成菜谱同一套信息 #}
+<form action="{{ action }}" method="post" enctype="multipart/form-data" id="recipe-form">
+  <p>菜名（必填）：<input type="text" name="name" required maxlength="40" value="{{ form.get('name', '') }}"></p>
+  <p>简介：<input type="text" name="description" placeholder="一句话说说这道菜怎么做" value="{{ form.get('description', '') }}"></p>
+  <p>分类（必填）：
+    <select name="template_id" required>
+      <option value="">请选择分类</option>
+      {% for c in categories %}
+      <option value="{{ c['template_id'] }}" {% if form.get('template_id')|string == c['template_id']|string %}selected{% endif %}>{{ c['category'] }}</option>
+      {% endfor %}
+    </select>
+  </p>
+  <p>大概时间（分钟）：<input type="number" name="time_minutes" min="1" max="1440" placeholder="比如 20" value="{{ form.get('time_minutes', '') }}"></p>
+  <p>要用的食材：<textarea name="ingredients_list" rows="2" placeholder="比如：鸡蛋 3 个、米饭、生抽、食用油">{{ form.get('ingredients_list', '') or '' }}</textarea></p>
+  <p>要用的厨具：<textarea name="tools_list" rows="2" placeholder="比如：平底锅、小碗、锅铲（写上锅具，推荐才算得准）">{{ form.get('tools_list', '') or '' }}</textarea></p>
+  <p>整道菜的安全提示：<input type="text" name="summary_safety_tip" placeholder="不填就用第一步的安全提示" value="{{ form.get('summary_safety_tip', '') or '' }}"></p>
+
+  <h2>做法步骤</h2>
+  <div id="steps">
+    {% set step_list = steps if steps else [{}] %}
+    {% for st in step_list %}
+    <fieldset class="step">
+      <legend>第 <span class="step-no">{{ loop.index }}</span> 步</legend>
+      <p>标题：<input type="text" name="step_title" placeholder="比如：打蛋" value="{{ st.get('title', '') }}"></p>
+      <p>做什么（必填）：<textarea name="step_action" rows="2" required>{{ st.get('action', '') }}</textarea></p>
+      <p>工具：<input type="text" name="step_tools" placeholder="比如：平底锅、锅铲" value="{{ st.get('tools', '') }}"></p>
+      <p>工具怎么用：<input type="text" name="step_tool_usage" value="{{ st.get('tool_usage', '') }}"></p>
+      <p>安全提示：<input type="text" name="step_safety_tip" value="{{ st.get('safety_tip', '') }}"></p>
+      <p><button type="button" class="remove-step">删掉这一步</button></p>
+    </fieldset>
+    {% endfor %}
+  </div>
+  <p><button type="button" id="add-step">+ 增加一步</button></p>
+
+  <p>菜品图片{% if recipe and recipe['image'] %}（不选就保留现在的图）{% endif %}：<input type="file" name="image" id="image-input" accept=".jpg,.jpeg,.png,.webp,.gif"></p>
+  <p class="hint">支持 jpg、png、webp、gif，最大 5MB。</p>
+  <img id="image-preview" alt="" style="display:none; width:100%; max-width:300px; border-radius:8px;">
+  {% if recipe and recipe['image'] %}<p>现在的图：<br><img src="{{ recipe['image'] }}" style="width:100%; max-width:200px; border-radius:8px;"></p>{% endif %}
+
+  <p><button type="button" id="preview-btn">先预览一下</button> <input type="submit" value="{{ submit_text }}"></p>
+</form>
+<div id="preview" class="preview" style="display:none;"></div>
+<script>
+(function () {
+  const steps = document.getElementById('steps');
+  function renumber() {
+    steps.querySelectorAll('.step').forEach((el, i) => { el.querySelector('.step-no').textContent = i + 1; });
+  }
+  document.getElementById('add-step').addEventListener('click', () => {
+    const first = steps.querySelector('.step');
+    const copy = first.cloneNode(true);
+    copy.querySelectorAll('input, textarea').forEach(el => { el.value = ''; });
+    steps.appendChild(copy);
+    renumber();
+  });
+  steps.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('remove-step')) return;
+    if (steps.querySelectorAll('.step').length === 1) { alert('至少要留一步'); return; }
+    e.target.closest('.step').remove();
+    renumber();
+  });
+  // 选图后先在页面上看一眼
+  document.getElementById('image-input').addEventListener('change', (e) => {
+    const img = document.getElementById('image-preview');
+    const file = e.target.files[0];
+    if (!file) { img.style.display = 'none'; return; }
+    if (file.size > 5 * 1024 * 1024) { alert('图片超过 5MB，请换一张小一点的'); e.target.value = ''; img.style.display = 'none'; return; }
+    img.src = URL.createObjectURL(file);
+    img.style.display = 'block';
+  });
+  // 预览：按详情页的样子把填的内容排出来（全部用 textContent，填什么显示什么）
+  document.getElementById('preview-btn').addEventListener('click', () => {
+    const f = document.getElementById('recipe-form');
+    const box = document.getElementById('preview');
+    box.textContent = '';
+    const add = (tag, text) => { const el = document.createElement(tag); el.textContent = text; box.appendChild(el); return el; };
+    add('h2', '预览：' + (f.name.value.trim() || '（还没填菜名）'));
+    if (f.description.value.trim()) add('p', f.description.value.trim());
+    const cat = f.template_id.options[f.template_id.selectedIndex];
+    add('p', '分类：' + (f.template_id.value ? cat.text : '（还没选）'));
+    add('p', '大概时间：' + (f.time_minutes.value ? f.time_minutes.value + ' 分钟' : '暂未填写'));
+    if (f.ingredients_list.value.trim()) add('p', '要用的食材：' + f.ingredients_list.value.trim());
+    if (f.tools_list.value.trim()) add('p', '要用的厨具：' + f.tools_list.value.trim());
+    const ol = document.createElement('ol');
+    steps.querySelectorAll('.step').forEach((el, i) => {
+      const li = document.createElement('li');
+      const t = el.querySelector('[name=step_title]').value.trim() || ('第' + (i + 1) + '步');
+      const h = document.createElement('h3'); h.textContent = t; li.appendChild(h);
+      [['做什么', 'step_action'], ['工具', 'step_tools'], ['工具怎么用', 'step_tool_usage'], ['安全提示', 'step_safety_tip']].forEach(([label, name]) => {
+        const v = el.querySelector('[name=' + name + ']').value.trim();
+        if (v) { const p = document.createElement('p'); p.textContent = label + '：' + v; li.appendChild(p); }
+      });
+      ol.appendChild(li);
+    });
+    box.appendChild(ol);
+    box.style.display = 'block';
+    box.scrollIntoView({behavior: 'smooth'});
+  });
+})();
+</script>

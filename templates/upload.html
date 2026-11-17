@@ -10,17 +10,12 @@
   <div class="page">
   <h1>上传菜谱</h1>
   {% include '_flash.html' %}
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <p>菜名（必填）：<input type="text" name="name" required value="{{ form.get('name', '') }}"></p>
-        <p>简介：<input type="text" name="description" value="{{ form.get('description', '') }}"></p>
-        <p>第一步标题：<input type="text" name="step_title" value="{{ form.get('step_title', '') }}"></p>
-        <p>做什么（必填）：<input type="text" name="action" required value="{{ form.get('action', '') }}"></p>
-        <p>工具：<input type="text" name="tools" value="{{ form.get('tools', '') }}"></p>
-        <p>工具怎么用：<input type="text" name="tool_usage" value="{{ form.get('tool_usage', '') }}"></p>
-        <p>安全提示：<input type="text" name="safety_tip" value="{{ form.get('safety_tip', '') }}"></p>
-        <p>菜品图片：<input type="file" name="image" accept="image/*"></p>
-        <p><input type="submit" value="上传"></p>
-  </form>
+  {% if not me %}
+  <p class="hint">建议先 <a href="/profile">保存厨房画像</a> 再上传，这样以后能自己修改和删除这道菜。</p>
+  {% endif %}
+  {% with action='/upload', submit_text='上传', recipe=None %}
+  {% include '_recipe_form.html' %}
+  {% endwith %}
   </div>
 {% include '_nav.html' %}
 </body>

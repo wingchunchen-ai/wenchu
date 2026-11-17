@@ -10,15 +10,17 @@
   <div class="page">
     <h1>修改菜谱</h1>
     {% include '_flash.html' %}
-    <form action="/edit/{{ recipe['id'] }}" method="post">
-      <p>菜名：<input type="text" name="name" value="{{ recipe['name'] }}" required></p>
-      <p>简介：<input type="text" name="description" value="{{ recipe['description'] }}"></p>
-      <p><input type="submit" value="保存修改"></p>
-    </form>
+    {% with action='/edit/' ~ recipe['id'], submit_text='保存修改' %}
+    {% include '_recipe_form.html' %}
+    {% endwith %}
     <hr>
+    {% if recipe['is_official'] %}
+    <p class="hint">这是稳厨自带的菜谱，可以修改，但不能删除。</p>
+    {% else %}
     <form action="/delete/{{ recipe['id'] }}" method="post" onsubmit="return confirm('确定要删除这道菜吗？删了就找不回来了。');">
       <button type="submit">删除这道菜</button>
     </form>
+    {% endif %}
     <p><a href="/recipe/{{ recipe['id'] }}">返回详情页</a></p>
   </div>
 {% include '_nav.html' %}
