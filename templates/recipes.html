@@ -1,43 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.css">
-    <title>{{ title }}</title>
+{% include '_head.html' %}
+  <title>{{ title }} - 稳厨</title>
 </head>
 <body>
-    <h1>{{ title }}</h1>
-    {% include '_flash.html' %}
-    {% if not me or not me['cookware'] %}
-    <p class="hint">填一下家里的锅具，能看到更合适的推荐：<a href="/profile">去填厨房画像</a></p>
-    {% endif %}
-    <form action="{{ base_path }}" method="get">
-  <input type="text" name="q" placeholder="搜菜名..." value="{{ q }}">
-  <button type="submit">搜索</button>
-</form>
-<p>
-  <a href="{{ base_path }}">全部</a>
-  {% for c in categories %}
-  <a href="{{ base_path }}?category={{ c|urlencode }}">{{ c }}</a>
-  {% endfor %}
-</p>
-<p>
-  时间：
-  <a href="{{ base_path }}">全部时间</a>
-  {% for t in time_filters %}
-  <a href="{{ base_path }}?time={{ t|urlencode }}">{{ t }}</a>
-  {% endfor %}
-</p>
-    {% if recipes %}
-    <ul>
-        {% for recipe in recipes %}
-        <li>{% if recipe['image'] %}<img src="{{ recipe['image'] }}" style="width:100%; max-width:200px; border-radius:8px;">{% endif %}<a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a>{% if recipe['rate'] is not none %} 好评率 {{ recipe['rate'] }}%（{{ recipe['total'] }}人评价）{% else %} 暂无评价{% endif %}</li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>没有找到符合条件的菜谱，换个关键词或分类试试。</p>
-    {% endif %}
+<div class="page">
+  <h1>{{ title }}</h1>
+  <p class="hint">{% if base_path == '/recipes' %}这里是还没人质疑的菜，放心照着做；有人质疑的菜在「质疑区」。{% else %}稳厨里的所有菜谱，包括正在被质疑的。{% endif %}</p>
+  {% include '_flash.html' %}
+  {% if not me or not me['cookware'] %}
+  <p class="hint">填一下家里的锅具，能看到更合适的推荐：<a href="/profile">去填厨房画像</a></p>
+  {% endif %}
+  <form action="{{ base_path }}" method="get" class="search">
+    <input type="text" name="q" placeholder="搜菜名..." value="{{ q }}">
+    <button type="submit">搜索</button>
+  </form>
+  <p class="filters">
+    分类：
+    <a href="{{ base_path }}" {% if not category %}class="on"{% endif %}>全部</a>
+    {% for c in categories %}
+    <a href="{{ base_path }}?category={{ c|urlencode }}" {% if c == category %}class="on"{% endif %}>{{ c }}</a>
+    {% endfor %}
+  </p>
+  <p class="filters">
+    时间：
+    <a href="{{ base_path }}" {% if not time_filter %}class="on"{% endif %}>全部时间</a>
+    {% for t in time_filters %}
+    <a href="{{ base_path }}?time={{ t|urlencode }}" {% if t == time_filter %}class="on"{% endif %}>{{ t }}</a>
+    {% endfor %}
+  </p>
+  {% if q or category or time_filter %}
+  <p class="hint">共找到 {{ recipes|length }} 道菜。<a href="{{ base_path }}">清除筛选</a></p>
+  {% endif %}
+  {% if recipes %}
+  <ul class="recipe-list">
+    {% for recipe in recipes %}
+    <li class="recipe-card">
+      <a href="/recipe/{{ recipe['id'] }}">
+        {% if recipe['image'] %}<img src="{{ recipe['image'] }}" alt="{{ recipe['name'] }}">{% endif %}
+        <strong>{{ recipe['name'] }}</strong>
+      </a>
+      <div class="meta">
+        {% if recipe['category'] %}{{ recipe['category'] }} · {% endif %}{% if recipe['time_minutes'] %}约 {{ recipe['time_minutes'] }} 分钟{% else %}时间未填{% endif %}
+        · {% if recipe['rate'] is not none %}好评率 {{ recipe['rate'] }}%（{{ recipe['total'] }}人评价）{% else %}暂无评价{% endif %}
+      </div>
+      {% if recipe['description'] %}<div class="desc">{{ recipe['description'] }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>没有找到符合条件的菜谱，换个关键词或分类试试。</p>
+  {% endif %}
+</div>
 {% include '_nav.html' %}
 </body>
 </html>

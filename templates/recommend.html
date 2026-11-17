@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.css">
-    <title>为你推荐</title>
+{% include '_head.html' %}
+  <title>为你推荐 - 稳厨</title>
 </head>
 <body>
+<div class="page">
     <h1>为你推荐</h1>
     {% if need_profile %}
     <p>先告诉稳厨你家里有哪些锅具，才能算出你能做哪些菜。</p>
@@ -34,6 +33,7 @@
     <p>没有缺锅具的菜，全都能做！</p>
     {% endif %}
     {% endif %}
+</div>
 {% include '_nav.html' %}
 </body>
 </html>

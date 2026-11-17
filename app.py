@@ -163,11 +163,11 @@ def list_recipes(only_normal, base_path, title):
 # 总表：全部菜谱，不管有没有被质疑
 @app.route('/all')
 def all_recipes():
-    return list_recipes(False, '/all', '总菜谱')
-# 正常菜谱：没被质疑的菜，也能搜索和分类筛选；不再要求先填画像
+    return list_recipes(False, '/all', '全部菜谱')
+# 放心菜谱（原来叫正常菜谱）：没被质疑的菜，也能搜索和分类筛选；不再要求先填画像
 @app.route('/recipes')
 def recipes():
-    return list_recipes(True, '/recipes', '正常菜谱')
+    return list_recipes(True, '/recipes', '放心菜谱')
 # 菜谱详情路由：网址是 /recipe/1、/recipe/2 这样，数字就是菜的 id
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):

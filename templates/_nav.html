@@ -1,8 +1,8 @@
   <nav class="bottom-nav">
-    <a href="/all">总菜谱</a>
-    <a href="/recipes">正常菜谱</a>
-    <a href="/upload" class="nav-upload">+</a>
-    <a href="/recommend">推荐</a>
-    <a href="/questions">被质疑的菜谱</a>
-    <a href="/profile">我</a>
+    <a href="/all" {% if request.path == '/all' %}class="active"{% endif %}>全部菜谱</a>
+    <a href="/recipes" {% if request.path == '/recipes' %}class="active"{% endif %}>放心菜谱</a>
+    <a href="/upload" class="nav-upload" title="上传菜谱">+</a>
+    <a href="/recommend" {% if request.path == '/recommend' %}class="active"{% endif %}>推荐</a>
+    <a href="/questions" {% if request.path.startswith('/question') %}class="active"{% endif %}>质疑区</a>
+    <a href="/profile" {% if request.path == '/profile' %}class="active"{% endif %}>我</a>
   </nav>

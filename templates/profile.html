@@ -1,16 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>我的画像 - 稳厨</title>
-<link rel="stylesheet" href="/static/style.css">
+{% include '_head.html' %}
+<title>我的厨房画像 - 稳厨</title>
 </head>
 <body>
 <div class="page">
 {% include '_flash.html' %}
 {% if user and not edit %}
-  <!-- 看：显示已保存的画像 -->
   <div style="text-align:center;font-size:64px;">{{ user['avatar'] or '🍳' }}</div>
   <h1 style="text-align:center;">{{ user['nickname'] }}</h1>
   <p>我的锅具：</p>
@@ -26,7 +23,6 @@
   <p><a href="/recommend" class="hero-btn">去看适合我的菜</a></p>
   <p><a href="/profile?edit=1">更改画像</a></p>
 {% else %}
-  <!-- 改：编辑表单 -->
   <h1>{% if user %}更改画像{% else %}我的厨房画像{% endif %}</h1>
   <form action="/profile" method="post">
     <p>选个头像：</p>
@@ -40,12 +36,12 @@
     <p>昵称：<input type="text" name="nickname" value="{{ user['nickname'] if user else '' }}" required maxlength="20"></p>
     <p>家里有哪些锅具（可多选）：</p>
     <div class="cookware-grid">
-      <label><img src="/static/cookware/chaoguo.png"><input type="checkbox" name="cookware" value="炒锅" {% if '炒锅' in user_cookware %}checked{% endif %}>炒锅</label>
-      <label><img src="/static/cookware/dianfanbao.png"><input type="checkbox" name="cookware" value="电饭煲" {% if '电饭煲' in user_cookware %}checked{% endif %}>电饭煲</label>
-      <label><img src="/static/cookware/weipolu.png"><input type="checkbox" name="cookware" value="微波炉" {% if '微波炉' in user_cookware %}checked{% endif %}>微波炉</label>
-      <label><img src="/static/cookware/kongqizhaguo.png"><input type="checkbox" name="cookware" value="空气炸锅" {% if '空气炸锅' in user_cookware %}checked{% endif %}>空气炸锅</label>
-      <label><img src="/static/cookware/zhengguo.png"><input type="checkbox" name="cookware" value="蒸锅" {% if '蒸锅' in user_cookware %}checked{% endif %}>蒸锅</label>
-      <label><img src="/static/cookware/pingdiguo.png"><input type="checkbox" name="cookware" value="平底锅" {% if '平底锅' in user_cookware %}checked{% endif %}>平底锅</label>
+      <label><img src="/static/cookware/chaoguo.jpg" alt=""><input type="checkbox" name="cookware" value="炒锅" {% if '炒锅' in user_cookware %}checked{% endif %}>炒锅</label>
+      <label><img src="/static/cookware/dianfanbao.jpg" alt=""><input type="checkbox" name="cookware" value="电饭煲" {% if '电饭煲' in user_cookware %}checked{% endif %}>电饭煲</label>
+      <label><img src="/static/cookware/weipolu.jpg" alt=""><input type="checkbox" name="cookware" value="微波炉" {% if '微波炉' in user_cookware %}checked{% endif %}>微波炉</label>
+      <label><img src="/static/cookware/kongqizhaguo.jpg" alt=""><input type="checkbox" name="cookware" value="空气炸锅" {% if '空气炸锅' in user_cookware %}checked{% endif %}>空气炸锅</label>
+      <label><img src="/static/cookware/zhengguo.jpg" alt=""><input type="checkbox" name="cookware" value="蒸锅" {% if '蒸锅' in user_cookware %}checked{% endif %}>蒸锅</label>
+      <label><img src="/static/cookware/pingdiguo.jpg" alt=""><input type="checkbox" name="cookware" value="平底锅" {% if '平底锅' in user_cookware %}checked{% endif %}>平底锅</label>
     </div>
     <p><input type="submit" value="保存"></p>
   </form>

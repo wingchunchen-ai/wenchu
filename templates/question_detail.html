@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.css">
-    <title>质疑</title>
+{% include '_head.html' %}
+  <title>质疑详情 - 稳厨</title>
 </head>
 <body>
+<div class="page">
     <h1>质疑详情</h1>
     {% include '_flash.html' %}
     <p>
@@ -28,7 +27,6 @@
     {% if not me %}
     <p class="hint">站队要先 <a href="/profile">保存厨房画像</a>。</p>
     {% endif %}
-    <!-- 站队表单：点按钮就把裁决发到 /verdict 路由 -->
     <form action="/verdict" method="post">
         <input type="hidden" name="question_id" value="{{ question['id'] }}">
         <input type="hidden" name="verdict" value="确实有错">
@@ -40,6 +38,7 @@
         <button type="submit">质疑不对</button>
     </form>
     <p><a href="/questions">← 返回被质疑区</a></p>
+</div>
 {% include '_nav.html' %}
 </body>
 </html>

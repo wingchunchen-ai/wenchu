@@ -1,15 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/static/style.css">
-<title>稳厨</title>
+{% include '_head.html' %}
+<title>稳厨 - 有什么锅，就做什么菜</title>
 </head>
 <body>
 <div class="hero">
   <h1>稳厨</h1>
-  <p>欢迎来到稳厨</p>
+  <p>欢迎来到稳厨：按你家里的锅具，找到能稳稳做成的菜</p>
   <button class="hero-btn" onclick="showRecommend()">进入稳厨</button>
 <div id="recommend-popup" style="display:none;">
   <div class="popup-box">

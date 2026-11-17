@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.css">
-    <title>被质疑区</title>
+{% include '_head.html' %}
+  <title>质疑区 - 稳厨</title>
 </head>
 <body>
-    <h1>被质疑区</h1>
+<div class="page">
+    <h1>质疑区</h1>
+    <p class="hint">照着做出了问题，就在菜谱详情页提质疑；其他人可以站队判断质疑对不对。</p>
     {% include '_flash.html' %}
     {% if questions %}
     <ul>
@@ -21,6 +21,7 @@
     {% else %}
     <p>暂时还没有被质疑的菜谱。</p>
     {% endif %}
+</div>
 {% include '_nav.html' %}
 </body>
 </html>
