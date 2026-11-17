@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>菜谱列表</title>
+</head>
+<body>
+    <h1>菜谱列表</h1>
+    <form action="/recipes" method="get">
+  <input type="text" name="q" placeholder="搜菜名...">
+  <button type="submit">搜索</button>
+</form>
+<p>
+  <a href="/recipes">全部</a>
+  <a href="/recipes?category=一人食漂亮饭">一人食漂亮饭</a>
+  <a href="/recipes?category=空气炸锅/烤箱">空气炸锅/烤箱</a>
+  <a href="/recipes?category=快手小炒">快手小炒</a>
+  <a href="/recipes?category=焖煮/一锅出">焖煮/一锅出</a>
+  <a href="/recipes?category=蒸制">蒸制</a>
+  <a href="/recipes?category=汤羹">汤羹</a>
+  <a href="/recipes?category=凉拌/免开火">凉拌/免开火</a>
+  <a href="/recipes?category=煎制">煎制</a>
+</p>
+<p>
+  时间：
+  <a href="/recipes">全部时间</a>
+  <a href="/recipes?time=15分钟以内">15分钟以内</a>
+  <a href="/recipes?time=15到30分钟">15到30分钟</a>
+  <a href="/recipes?time=30分钟以上">30分钟以上</a>
+</p>
+    <ul>
+        {% for recipe in recipes %}
+        <li>{% if recipe['image'] %}<img src="{{ recipe['image'] }}" style="width:100%; max-width:200px; border-radius:8px;">{% endif %}<a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a>{% if recipe['rate'] is not none %} 好评率 {{ recipe['rate'] }}%（{{ recipe['total'] }}人评价）{% else %} 暂无评价{% endif %}</li>
+        {% endfor %}
+    </ul>
+    <nav class="bottom-nav">
+  <a href="/all">总菜谱</a>
+  <a href="/recipes">正常菜谱</a>
+  <a href="/upload" class="nav-upload">+</a>
+  <a href="/questions">被质疑的菜谱</a>
+  <a href="/profile">我</a>
+</nav>
+<script>
+function vote(recipeId, v) {
+  fetch('/vote', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({recipe_id: recipeId, vote: v})
+  }).then(() => location.reload());
+}
+</script>
+</body>
+</html>

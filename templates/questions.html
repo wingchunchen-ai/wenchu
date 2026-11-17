@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>被质疑区</title>
+</head>
+<body>
+    <h1>被质疑区</h1>
+    <ul>
+    {% for q in questions %}
+        <li>
+            <a href="/recipe/{{ q['recipe_id'] }}">{{ q['recipe_name'] }}</a>：
+            {{ q['question_text'] }}
+            （{{ q['nickname'] }}，{{ q['created_at'] }}）
+        </li>
+    {% endfor %}
+    </ul>
+    <nav class="bottom-nav">
+    <a href="/all">总菜谱</a>
+    <a href="/recipes">正常菜谱</a>
+    <a href="/upload" class="nav-upload">+</a>
+    <a href="/questions">被质疑的菜谱</a>
+    <a href="/profile">我</a>
+    </nav>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>上传菜谱</title>
+</head>
+<body>
+  <div class="page">
+  <h1>上传菜谱</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <p>菜名：<input type="text" name="name"></p>
+        <p>简介：<input type="text" name="description"></p>
+        <p>第一步标题：<input type="text" name="step_title"></p>
+        <p>做什么：<input type="text" name="action"></p>
+        <p>工具：<input type="text" name="tools"></p>
+        <p>工具怎么用：<input type="text" name="tool_usage"></p>
+        <p>安全提示：<input type="text" name="safety_tip"></p>
+        <p>菜品图片：<input type="file" name="image" accept="image/*"></p>
+        <p><input type="submit" value="上传"></p>
+  </form>
+  </div>
+  <nav class="bottom-nav">
+    <a href="/all">总菜谱</a>
+    <a href="/recipes">正常菜谱</a>
+    <a href="/upload" class="nav-upload">+</a>
+    <a href="/questions">被质疑的菜谱</a>
+    <a href="/profile">我</a>
+  </nav>
+</body>
+</html>
