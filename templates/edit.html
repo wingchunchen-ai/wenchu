@@ -9,23 +9,18 @@
 <body>
   <div class="page">
     <h1>修改菜谱</h1>
-    <form action="/edit/{{ recipe.id }}" method="post">
-      <p>菜名：<input type="text" name="name" value="{{ recipe.name }}"></p>
-      <p>简介：<input type="text" name="description" value="{{ recipe.description }}"></p>
+    {% include '_flash.html' %}
+    <form action="/edit/{{ recipe['id'] }}" method="post">
+      <p>菜名：<input type="text" name="name" value="{{ recipe['name'] }}" required></p>
+      <p>简介：<input type="text" name="description" value="{{ recipe['description'] }}"></p>
       <p><input type="submit" value="保存修改"></p>
     </form>
     <hr>
-    <form action="/delete/{{ recipe.id }}" method="post" onsubmit="return confirm('确定要删除这道菜吗？删了就找不回来了。');">
+    <form action="/delete/{{ recipe['id'] }}" method="post" onsubmit="return confirm('确定要删除这道菜吗？删了就找不回来了。');">
       <button type="submit">删除这道菜</button>
     </form>
-    <p><a href="/recipe/{{ recipe.id }}">返回详情页</a></p>
+    <p><a href="/recipe/{{ recipe['id'] }}">返回详情页</a></p>
   </div>
-  <nav class="bottom-nav">
-    <a href="/all">总菜谱</a>
-    <a href="/recipes">正常菜谱</a>
-    <a href="/upload" class="nav-upload">+</a>
-    <a href="/questions">被质疑的菜谱</a>
-    <a href="/profile">我</a>
-  </nav>
+{% include '_nav.html' %}
 </body>
 </html>

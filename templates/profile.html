@@ -8,32 +8,37 @@
 </head>
 <body>
 <div class="page">
+{% include '_flash.html' %}
 {% if user and not edit %}
   <!-- 看：显示已保存的画像 -->
   <div style="text-align:center;font-size:64px;">{{ user['avatar'] or '🍳' }}</div>
   <h1 style="text-align:center;">{{ user['nickname'] }}</h1>
   <p>我的锅具：</p>
+  {% if user_cookware %}
   <ul>
-  {% for item in user['cookware'].split(',') if user['cookware'] %}
+  {% for item in user_cookware %}
     <li>{{ item }}</li>
   {% endfor %}
   </ul>
-  <p><a href="/profile?edit=1" class="hero-btn">更改</a></p>
+  {% else %}
+  <p>还没选锅具，选了以后推荐会更准。</p>
+  {% endif %}
+  <p><a href="/recommend" class="hero-btn">去看适合我的菜</a></p>
+  <p><a href="/profile?edit=1">更改画像</a></p>
 {% else %}
   <!-- 改：编辑表单 -->
   <h1>{% if user %}更改画像{% else %}我的厨房画像{% endif %}</h1>
   <form action="/profile" method="post">
     <p>选个头像：</p>
     <div>
-    {% for emoji in ['🍳','👨‍🍳','👩‍🍳','🐱','🐶','🦊','🐼','🎃'] %}
+    {% for emoji in avatars %}
       <label style="font-size:32px;">
-        <input type="radio" name="avatar" value="{{ emoji }}" {% if user and user['avatar'] == emoji %}checked{% endif %}>{{ emoji }}
+        <input type="radio" name="avatar" value="{{ emoji }}" {% if (user and user['avatar'] == emoji) or (not user and loop.first) %}checked{% endif %}>{{ emoji }}
       </label>
     {% endfor %}
     </div>
-    <p>昵称：<input type="text" name="nickname" value="{{ user['nickname'] if user else '' }}"></p>
+    <p>昵称：<input type="text" name="nickname" value="{{ user['nickname'] if user else '' }}" required maxlength="20"></p>
     <p>家里有哪些锅具（可多选）：</p>
-    {% set user_cookware = user['cookware'].split(',') if user and user['cookware'] else [] %}
     <div class="cookware-grid">
       <label><img src="/static/cookware/chaoguo.png"><input type="checkbox" name="cookware" value="炒锅" {% if '炒锅' in user_cookware %}checked{% endif %}>炒锅</label>
       <label><img src="/static/cookware/dianfanbao.png"><input type="checkbox" name="cookware" value="电饭煲" {% if '电饭煲' in user_cookware %}checked{% endif %}>电饭煲</label>
@@ -46,12 +51,6 @@
   </form>
 {% endif %}
 </div>
-<nav class="bottom-nav">
-  <a href="/all">总菜谱</a>
-  <a href="/recipes">正常菜谱</a>
-  <a href="/upload" class="nav-upload">+</a>
-  <a href="/questions">被质疑的菜谱</a>
-  <a href="/profile">我</a>
-</nav>
+{% include '_nav.html' %}
 </body>
 </html>

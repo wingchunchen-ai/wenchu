@@ -8,18 +8,32 @@
 </head>
 <body>
     <h1>为你推荐</h1>
-    <p>你有的锅具：{{ ','.join(user_cookware) }}</p>
+    {% if need_profile %}
+    <p>先告诉稳厨你家里有哪些锅具，才能算出你能做哪些菜。</p>
+    <p><a href="/profile?edit=1" class="hero-btn">去填厨房画像</a></p>
+    {% else %}
+    <p>你有的锅具：{{ '、'.join(user_cookware) }}（<a href="/profile?edit=1">改一改</a>）</p>
     <h2>能做的</h2>
+    {% if can_make %}
     <ul>
         {% for recipe in can_make %}
         <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a></li>
         {% endfor %}
     </ul>
+    {% else %}
+    <p>暂时没有你现在的锅具就能做的菜。</p>
+    {% endif %}
     <h2>缺锅具</h2>
+    {% if cannot_make %}
     <ul>
         {% for recipe, missing in cannot_make %}
-        <li>{{ recipe['name'] }}（缺：{{ ','.join(missing) }}）</li>
+        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a>（缺：{{ '、'.join(missing) }}）</li>
         {% endfor %}
     </ul>
+    {% else %}
+    <p>没有缺锅具的菜，全都能做！</p>
+    {% endif %}
+    {% endif %}
+{% include '_nav.html' %}
 </body>
 </html>

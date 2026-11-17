@@ -8,21 +8,19 @@
 </head>
 <body>
     <h1>被质疑区</h1>
+    {% include '_flash.html' %}
+    {% if questions %}
     <ul>
     {% for q in questions %}
         <li>
-            <a href="/recipe/{{ q['recipe_id'] }}">{{ q['recipe_name'] }}</a>：
-            {{ q['question_text'] }}
-            （{{ q['nickname'] }}，{{ q['created_at'] }}）
+            <a href="/question/{{ q['id'] }}">{{ q['question_text'] }}</a>
+            （菜谱：<a href="/recipe/{{ q['recipe_id'] }}">{{ q['recipe_name'] }}</a>，{{ q['nickname'] or '匿名' }}，{{ q['created_at'] }}）
         </li>
     {% endfor %}
     </ul>
-    <nav class="bottom-nav">
-    <a href="/all">总菜谱</a>
-    <a href="/recipes">正常菜谱</a>
-    <a href="/upload" class="nav-upload">+</a>
-    <a href="/questions">被质疑的菜谱</a>
-    <a href="/profile">我</a>
-    </nav>
+    {% else %}
+    <p>暂时还没有被质疑的菜谱。</p>
+    {% endif %}
+{% include '_nav.html' %}
 </body>
 </html>

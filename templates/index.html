@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/style.css">
+<title>稳厨</title>
 </head>
 <body>
 <div class="hero">
@@ -18,49 +19,53 @@
   </div>
 </div>
 </div>
+<script src="/static/vote.js"></script>
 <script>
 function showRecommend() {
-  const today = new Date().toDateString();
-  const cachedDate = localStorage.getItem('recommend_date');
-  if (cachedDate === today) {
-    const data = JSON.parse(localStorage.getItem('recommend_data'));
-    renderRecommend(data);
-  } else {
-    fetch('/daily_recommend')
-      .then(r => r.json())
-      .then(data => {
-        if (data.recipes.length > 0) {
-          localStorage.setItem('recommend_date', today);
-          localStorage.setItem('recommend_data', JSON.stringify(data));
-        }
-
-        renderRecommend(data);
-      });
-  }
+  // 每次都向服务器要最新推荐：改过画像后马上能看到新结果
+  fetch('/daily_recommend')
+    .then(r => r.json())
+    .then(renderRecommend)
+    .catch(() => renderRecommend({recipes: [], need_profile: false, error: true}));
   document.getElementById('recommend-popup').style.display = 'flex';
 }
+// 菜名一律用 textContent 当普通文字放进去，不拼进 HTML，防止菜名里的脚本被执行
 function renderRecommend(data) {
   const list = document.getElementById('recommend-list');
-  list.innerHTML = '';
-  if (data.recipes.length === 0) {
-  if (data.need_profile) {
-  list.innerHTML = '<p>还没填过家里有的锅具，<a href="/profile" style="color: #FF8C00;">先去填一下</a>，稳厨每天给你推能做的菜。</p>';
-  } else {
-    list.innerHTML = '<p>今天没有符合你锅具的菜</p>';
-  }
+  list.textContent = '';
+  if (!data.recipes || data.recipes.length === 0) {
+    const p = document.createElement('p');
+    if (data.need_profile) {
+      p.appendChild(document.createTextNode('还没填过家里有的锅具，'));
+      const a = document.createElement('a');
+      a.href = '/profile';
+      a.style.color = '#FF8C00';
+      a.textContent = '先去填一下';
+      p.appendChild(a);
+      p.appendChild(document.createTextNode('，稳厨每天给你推能做的菜。'));
+    } else if (data.error) {
+      p.textContent = '推荐暂时没取到，先去看看全部菜谱吧。';
+    } else {
+      p.textContent = '今天没有符合你锅具的菜';
+    }
+    list.appendChild(p);
     return;
   }
   data.recipes.forEach(r => {
-    const div = document.createElement('div');
-    div.innerHTML = '<p><a href="/recipe/' + r.id + '">' + r.name + '</a> <button onclick="vote(' + r.id + ', \'like\')">👍</button> <button onclick="vote(' + r.id + ', \'dislike\')">👎</button></p>';
-    list.appendChild(div);
-  });
-}
-function vote(recipeId, v) {
-  fetch('/vote', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({recipe_id: recipeId, vote: v})
+    const p = document.createElement('p');
+    const a = document.createElement('a');
+    a.href = '/recipe/' + encodeURIComponent(r.id);
+    a.textContent = r.name;
+    const like = document.createElement('button');
+    like.type = 'button';
+    like.textContent = '👍';
+    like.addEventListener('click', () => vote(r.id, 'like'));
+    const dislike = document.createElement('button');
+    dislike.type = 'button';
+    dislike.textContent = '👎';
+    dislike.addEventListener('click', () => vote(r.id, 'dislike'));
+    p.append(a, ' ', like, ' ', dislike);
+    list.appendChild(p);
   });
 }
 function closePopup() {

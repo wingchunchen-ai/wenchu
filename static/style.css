@@ -165,3 +165,14 @@ a:hover {
   text-align: center;
   color: #240d01d6;
 }
+/* 一次性提示（保存成功、上传成功、出错原因） */
+.flash {
+  background: #FFF1D6;
+  border: 1px solid #FF7A45;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.hint {
+  color: #6d5a52;
+  font-size: 16px;
+}
