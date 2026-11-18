@@ -30,7 +30,7 @@ import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-DEFAULT_PER_IP_DAILY = 5    # 每个 IP 每天（伦敦日期）最多真正调几次 AI，环境变量 DISH_AI_PER_IP_DAILY
+DEFAULT_PER_IP_DAILY = 0    # 每个 IP 每天（伦敦日期）最多真正调几次 AI，环境变量 DISH_AI_PER_IP_DAILY；0 = 不限（现在默认不限）
 DEFAULT_DAILY_CAP = 200     # 全站每天最多真正调几次 AI，环境变量 DISH_AI_DAILY_CAP
 LONDON = ZoneInfo('Europe/London')
 
@@ -89,6 +89,7 @@ def daily_cap():
 
 
 def per_ip_daily():
+    # 注意：这里 0 表示「每个 IP 不限次数」（跟全站上限的 0 = 关掉 AI 不一样）
     return _env_int('DISH_AI_PER_IP_DAILY', DEFAULT_PER_IP_DAILY)
 
 
@@ -114,7 +115,7 @@ def limit_reason(conn, visitor, day=None):
     if conn.execute('SELECT COUNT(*) FROM dish_ai_calls WHERE day = ?', (day,)).fetchone()[0] >= daily_cap():
         return '今天全站的 AI 次数已用完，先用稳厨经验库'
     limit = per_ip_daily()
-    if conn.execute('SELECT COUNT(*) FROM dish_ai_calls WHERE day = ? AND visitor = ?', (day, visitor)).fetchone()[0] >= limit:
+    if limit and conn.execute('SELECT COUNT(*) FROM dish_ai_calls WHERE day = ? AND visitor = ?', (day, visitor)).fetchone()[0] >= limit:
         return f'你今天的 {limit} 次 AI 拆菜已用完，先用稳厨经验库（明天再来）'
     return None
 

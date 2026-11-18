@@ -49,6 +49,6 @@ python tests/test_main_path.py
 - 没配密钥、AI 超时/出错/返回坏 JSON，或勾选「只用稳厨经验库」时，走规则兜底（站内菜谱 + 常见菜资料 + 菜名关键词），页面会写明用的是「AI+规则」还是「规则兜底」。
 - 密钥只放在服务器环境变量 `DEEPSEEK_API_KEY`，不写进代码和仓库。
 - 拆菜记录 + 缓存：每次成功的 AI 拆菜存进 `dish_breakdowns` 表（归一化菜名、说明、清洗后的 JSON、模式、模型、token 用量、时间），表结构写在 `dish_store.py` 顶部。同一道菜、没写说明时直接用存下的结果，不调 AI、不占次数。
-- 限额（只数真正发出去的请求，按伦敦日期每天清零）：每个 IP 每天 `DISH_AI_PER_IP_DAILY` 次（默认 5，Render 上取 X-Forwarded-For 第一个 IP，库里只存哈希）；全站每天 `DISH_AI_DAILY_CAP` 次（默认 200，设 0 关掉 AI）。超了自动走稳厨经验库，页面写明原因。
+- 限额（只数真正发出去的请求，按伦敦日期每天清零）：每个 IP 每天 `DISH_AI_PER_IP_DAILY` 次（默认 0 = 不限，需要时再设，比如 5；Render 上取 X-Forwarded-For 第一个 IP，库里只存哈希）；全站每天 `DISH_AI_DAILY_CAP` 次（默认 200，设 0 关掉 AI）。超了自动走稳厨经验库，页面写明原因。
 - 注意：Render 免费版重新部署会清空 SQLite，拆菜记录和次数也会一起清空。
 - 测试：`python tests/test_dish_ai.py`（不连网，DeepSeek 用假的代替）。

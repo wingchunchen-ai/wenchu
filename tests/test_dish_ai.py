@@ -255,7 +255,7 @@ try:
 
     check('菜名归一：空格、标点、全角都算同一道菜',
           dish_store.normalize_dish(' 宫保 鸡丁！') == dish_store.normalize_dish('宫保鸡丁') == dish_store.normalize_dish('宫保鸡丁 '))
-    check('默认限额：每 IP 每天 5 次、全站每天 200 次', dish_store.per_ip_daily() == 5 and dish_store.daily_cap() == 200)
+    check('默认限额：每 IP 不限（0）、全站每天 200 次', dish_store.per_ip_daily() == 0 and dish_store.daily_cap() == 200)
     os.environ['DISH_AI_DAILY_CAP'] = 'abc'
     os.environ['DISH_AI_PER_IP_DAILY'] = '-3'
     check('环境变量写错用默认值，负数当 0', dish_store.daily_cap() == 200 and dish_store.per_ip_daily() == 0)
@@ -316,6 +316,11 @@ try:
         post('宫保鸡丁', '1.1.1.1')
         check('带说明的记录不会被当成空说明的缓存（仍命中最早那条，不调 AI）', len(calls) == 2)
 
+        n = len(calls)
+        for i in range(7):
+            post(f'不限测试{i}', '1.2.3.4')
+        check('默认每 IP 不限：同一个 IP 调 7 次都真调 AI', len(calls) == n + 7)
+        os.environ['DISH_AI_PER_IP_DAILY'] = '5'  # 下面测「打开每 IP 限额」的情况
         before = len(calls)
         for i in range(5):
             post(f'测试菜{i}', '2.2.2.2')
@@ -338,7 +343,10 @@ try:
         os.environ['DISH_AI_PER_IP_DAILY'] = '7'
         post('测试菜102', '2.2.2.2')
         check('把 DISH_AI_PER_IP_DAILY 调大，同一个 IP 又能用', len(calls) == before + 8)
-        os.environ.pop('DISH_AI_PER_IP_DAILY')
+        os.environ['DISH_AI_PER_IP_DAILY'] = '0'
+        post('测试菜103', '2.2.2.2')
+        check('DISH_AI_PER_IP_DAILY=0：不限，同一个 IP 继续能用', len(calls) == before + 9)
+        os.environ['DISH_AI_PER_IP_DAILY'] = '5'
 
         con = db()
         v4 = dish_store.visitor_id('4.4.4.4', wenchu.app.secret_key)
@@ -388,7 +396,10 @@ try:
         post('蛋炒饭', '8.8.8.8')
         check('站内菜不调 AI，也不占次数', len(calls) == n)
         h = c.get('/dish-ai').get_data(as_text=True)
-        check('页面写明每人每天 5 次、拆过的菜不占次数', '每人每天 5 次' in h and '不占次数' in h)
+        check('打开每 IP 限额时，页面写明每人每天 5 次', '每人每天 5 次' in h and '不占次数' in h)
+        os.environ.pop('DISH_AI_PER_IP_DAILY')
+        h = c.get('/dish-ai').get_data(as_text=True)
+        check('默认不限每人次数：页面不写「每人每天」，只写拆过的菜不占次数', '每人每天' not in h and '不占次数' in h)
     finally:
         dish_ai.call_deepseek = orig
     reply = dish_ai.call_deepseek('x', '', api_key='sk-test-not-real', opener=lambda req, timeout: FakeResp(json.dumps(

@@ -24,7 +24,7 @@
         <label class="check"><input type="checkbox" name="rules_only" value="1" {% if rules_only %}checked{% endif %}> 只用稳厨经验库（不调 AI，断网也能演示）</label>
         <button type="submit" class="btn btn-primary btn-lg" id="ai-submit">开始拆菜 →</button>
       </div>
-      <p class="meta ai-quota">AI 拆菜每人每天 {{ per_ip }} 次，全站每天也有总次数；之前拆过的菜直接用存下的结果，不占次数。次数用完会自动换成稳厨经验库。</p>
+      <p class="meta ai-quota">{% if per_ip %}AI 拆菜每人每天 {{ per_ip }} 次，{% else %}AI 拆菜{% endif %}全站每天有总次数；之前拆过的菜直接用存下的结果，不占次数。次数用完会自动换成稳厨经验库。</p>
       <p class="examples">试试：{% for e in examples %}<a href="#" class="chip" data-dish="{{ e }}">{{ e }}</a>{% endfor %}</p>
     </form>
   </div>
