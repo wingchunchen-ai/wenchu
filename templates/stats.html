@@ -33,7 +33,7 @@
   {% if recent %}
   <ul>{% for r in recent %}<li>{{ r['created_at'] }} · {{ sources.get(r['source'], r['source']) }} · {{ r['item_key'] }} · {{ catalog.platforms.get(r['platform'], {}).get('name', r['platform']) }}</li>{% endfor %}</ul>
   {% else %}<p>还没有点击。</p>{% endif %}
-  <p><a href="/starter">去入门备厨</a> · <a href="/all">回到全部菜谱</a></p>
+  <p><a href="/starter">先买哪口锅（入门备厨）</a> · <a href="/recipes">回去逛菜谱</a></p>
 </div>
 {% include '_nav.html' %}
 </body>

@@ -1,4 +1,4 @@
-# AI 拆菜 · 第一层「AI 初稿」+ 合并：DeepSeek 先拆，稳厨经验库（dish_rules）核对、补齐
+# 这道菜怎么做（原 AI 拆菜）· 第一层「AI 初稿」+ 合并：DeepSeek 先拆，稳厨经验库（dish_rules）核对、补齐
 # 密钥只从环境变量 DEEPSEEK_API_KEY 读，只在服务器端用；不打印、不写日志、不进页面
 import json
 import os
@@ -14,6 +14,7 @@ MODEL = 'deepseek-v4-flash'  # 只用这个模型，别换成 pro 或其他
 TIMEOUT = 20  # 秒；超时就走规则兜底，页面不会一直转圈
 MAX_ITEMS = 10
 MAX_NAME = 20
+MAX_STEPS = 8
 
 SYSTEM_PROMPT = (
     '你是家常菜拆解助手。用户给一道菜名（可能附简短描述），你只输出一个 JSON 对象，不要输出任何别的文字。'
@@ -21,7 +22,7 @@ SYSTEM_PROMPT = (
     '"canonical_name": "这道菜最通用的标准菜名（例如 宫爆鸡丁 → 宫保鸡丁、西红柿炒鸡蛋 → 番茄炒蛋；本来就标准就原样写）", '
     '"main": ["主料名", ...], "side": ["辅料名", ...], "season": ["调味料名", ...], '
     '"methods": ["做法", ...], "cookware": [{"name": "锅具名", "reason": "为什么要用（15字内）"}], '
-    '"tips": "给新手的一句提醒（30字内）"}。'
+    '"tips": "给新手的一句提醒（30字内）", "steps": ["做法步骤，一步一句（30字内），最多 6 步，不写用量"]}。'
     '规则：食材只写名字不写用量，每类最多 8 个；methods 只能从这些里选：' + '、'.join(dish_rules.METHOD_NAMES) + '；'
     'cookware 尽量用这些叫法：炒锅、平底锅、蒸锅、电饭煲、空气炸锅、微波炉、小汤锅、锅盖、锅铲、刀、案板、打蛋器、油温计、漏勺；'
     '不要写价格；不认得这道菜就把 recognized 设为 false，其他字段给空数组。'
@@ -131,6 +132,16 @@ def parse_ai_json(text):
         if name:
             cookware.append({'name': name, 'reason': reason})
     tips = data.get('tips') if isinstance(data.get('tips'), str) else ''
+    steps = []  # 可选：做法步骤（老记录没有这个字段，页面就只显示做法要点）
+    for st in (data.get('steps') if isinstance(data.get('steps'), list) else [])[:MAX_STEPS]:
+        if isinstance(st, dict):
+            st = st.get('text') or st.get('action')
+        if isinstance(st, str):
+            st = re.sub(r'<[^>]*>', '', st)
+            st = re.sub(r'[<>{}\[\]"`\\]', '', st)
+            st = re.sub(r'^\s*第?\s*\d+\s*[步.、:：)）]?[\s.、:：]*', '', st).strip()[:50]
+            if st:
+                steps.append(st)
     result = {
         'canonical_name': _clean_name(data.get('canonical_name')),
         'main': _clean_list(data.get('main')),
@@ -139,6 +150,7 @@ def parse_ai_json(text):
         'methods': methods,
         'cookware': cookware,
         'tips': re.sub(r'[<>{}\[\]"`\\]', '', tips).strip()[:60],
+        'steps': steps,
     }
     if not result['main'] or not result['methods']:
         raise AIError('AI 返回缺主料或做法')
@@ -163,6 +175,7 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
             ai = provider(dish, description) if provider else parse_ai_json((caller or call_deepseek)(dish, description))
         except AIError as e:
             ai_error = str(e)
+    steps = []  # 站内菜的步骤由 app 按菜谱补上；AI 的步骤在下面
     if rules['site_id']:
         mode = '稳厨菜谱'
         main, side, season = rules['main'], rules['side'], rules['season']
@@ -179,6 +192,7 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
                 methods.append(m)
         cookware, dropped = dish_rules.build_cookware(methods, ai['cookware'], rules['site_tools'])
         tips = ai['tips']
+        steps = list(ai.get('steps') or [])
     else:
         mode = '规则兜底'
         main, side, season = rules['main'], rules['side'], rules['season']
@@ -202,7 +216,7 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
         'dish': dish, 'description': description, 'mode': mode, 'ai_error': ai_error,
         'matched': rules['matched'], 'site_id': rules['site_id'], 'cached': bool(ai and ai.get('_cached')),
         'ai_meta': {k[1:]: v for k, v in (ai or {}).items() if k.startswith('_')}, 'main': main, 'side': side, 'season': season, 'methods': methods,
-        'cookware': cookware, 'dropped': [d for d in dropped if d], 'tips': tips,
+        'cookware': cookware, 'dropped': [d for d in dropped if d], 'tips': tips, 'steps': steps,
         'have': [p for p in pot_names if p in owned], 'missing': [p for p in pot_names if p not in owned],
         'know_pots': know_pots, 'cost': cost, 'rows': rows,
         'empty': not main and not methods,

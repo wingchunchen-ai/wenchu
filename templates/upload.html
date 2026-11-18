@@ -2,16 +2,16 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
-  <title>上传菜谱 - 稳厨</title>
+  <title>分享我的菜谱 - 稳厨</title>
 </head>
 <body>
   <div class="page">
-  <h1>上传菜谱</h1>
+  <h1>分享我的菜谱</h1>
   {% include '_flash.html' %}
   {% if not me %}
-  <p class="hint">建议先 <a href="/profile">保存厨房画像</a> 再上传，这样以后能自己修改和删除这道菜。</p>
+  <p class="hint">建议先 <a href="/profile">保存厨房画像</a> 再分享，这样以后能自己修改和删除这道菜。</p>
   {% endif %}
-  {% with action='/upload', submit_text='上传', recipe=None %}
+  {% with action='/upload', submit_text='发布', recipe=None %}
   {% include '_recipe_form.html' %}
   {% endwith %}
   </div>

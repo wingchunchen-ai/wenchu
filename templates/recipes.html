@@ -11,9 +11,18 @@
   <div class="page-head">
     <div>
       <h1>{{ title }}</h1>
-      <p class="hint">{% if base_path == '/recipes' %}这里是还没人质疑的菜，放心照着做；有人质疑的菜在「质疑区」。{% else %}稳厨里的所有菜谱，包括正在被质疑的。{% endif %}</p>
+      <p class="hint">{% if base_path == '/recipes' %}现在只看「放心菜」：还没人提出疑问的菜，放心照着做。{% else %}稳厨里的所有菜谱，包括正在被大家提出疑问的。{% endif %}</p>
     </div>
     <p class="ai-note">菜品图由 AI（即梦）生成，仅作示意</p>
+  </div>
+  {% set keep_all %}{% if q %}q={{ q|urlencode }}&{% endif %}{% if category %}category={{ category|urlencode }}&{% endif %}{% if time_filter %}time={{ time_filter|urlencode }}&{% endif %}{% if budget %}budget={{ budget }}{% endif %}{% endset %}
+  <div class="safe-switch">
+    {% if base_path == '/recipes' %}
+    <a class="switch on" href="/all?{{ keep_all }}" role="switch" aria-checked="true"><span class="knob"></span>只看放心菜</a>
+    {% else %}
+    <a class="switch" href="/recipes?{{ keep_all }}" role="switch" aria-checked="false"><span class="knob"></span>只看放心菜</a>
+    {% endif %}
+    <a class="switch-side" href="/questions">💬 大家的疑问</a>
   </div>
   {% include '_flash.html' %}
   {% if not me or not me['cookware'] %}
@@ -74,5 +83,6 @@
   {% endif %}
   {{ shopui.disclaimer(shop_cfg) }}
 </div>
+{% include '_footer.html' %}
 </body>
 </html>

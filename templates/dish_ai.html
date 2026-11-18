@@ -2,60 +2,48 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
-  <title>AI 拆菜 - 稳厨</title>
+  <title>{% if result %}{{ result.dish }}怎么做{% else %}这道菜怎么做{% endif %} - 稳厨</title>
 </head>
 {% import '_shop.html' as shopui %}
 <body>
 {% include '_nav.html' %}
+{% set ask_full = true %}
 <div class="page dish-ai">
   {% include '_flash.html' %}
+  {% if not result %}
   <div class="ai-hero">
-    <p class="eyebrow">🤖 AI 拆菜 · 稳厨特色</p>
-    <h1>随便说一道菜，稳厨帮你拆成「要买什么、要用什么锅」</h1>
-    <p class="hint">AI 先读懂这道菜（DeepSeek 出初稿），再由稳厨经验库按做法核对锅具、补上漏掉的必备锅具，最后对照你的厨房算出还缺什么、大概花多少。</p>
-    <form method="post" action="/dish-ai" class="ai-form" id="dish-ai-form">
-      <label>菜名 <span class="req">*</span>
-        <span class="suggest-wrap">
-          <input type="text" name="dish" id="dish-input" maxlength="20" required autocomplete="off" placeholder="比如：宫保鸡丁"
-                 value="{{ dish }}" aria-autocomplete="list" aria-controls="dish-suggest">
-          <span class="suggest-box" id="dish-suggest" role="listbox" hidden></span>
-        </span>
-      </label>
-      <p class="meta suggest-hint">边打字边联想「稳厨已有」的菜，点一下直接用现成结果（不调 AI）；不点也行，照常提交。</p>
-      <label>补充说明（可选）
-        <input type="text" name="description" maxlength="100" placeholder="比如：不要太辣、想用空气炸锅" value="{{ description }}">
-      </label>
-      <div class="ai-form-row">
-        <label class="check"><input type="checkbox" name="rules_only" value="1" {% if rules_only %}checked{% endif %}> 只用稳厨经验库（不调 AI，断网也能演示）</label>
-        <button type="submit" class="btn btn-primary btn-lg" id="ai-submit">开始拆菜 →</button>
-      </div>
-      <p class="meta ai-quota">{% if per_ip %}AI 拆菜每人每天 {{ per_ip }} 次，{% else %}AI 拆菜{% endif %}全站每天有总次数；之前拆过的菜直接用存下的结果，不占次数。次数用完会自动换成稳厨经验库。</p>
-      <p class="examples">试试：{% for e in examples %}<a href="#" class="chip" data-dish="{{ e }}">{{ e }}</a>{% endfor %}</p>
-    </form>
+    <p class="eyebrow">🔍 这道菜怎么做</p>
+    <h1>今天想做什么菜？</h1>
+    <p class="hint">说个菜名或拍张照：稳厨有现成菜谱就直接给；没有就请 AI 出初稿，再由稳厨经验库按做法核对锅具，最后对照你的厨房算出还缺什么、大概花多少。</p>
+    {% include '_ask_box.html' %}
+    <p class="examples">试试：{% for e in examples %}<a href="#" class="chip" data-dish="{{ e }}">{{ e }}</a>{% endfor %}</p>
+    <p class="meta ai-quota">{% if per_ip %}AI 每人每天 {{ per_ip }} 次，{% else %}AI {% endif %}全站每天有总次数；之前问过的菜直接用存下的结果，不占次数。次数用完会自动换成稳厨经验库。</p>
   </div>
-
-  {% if result %}
+  {% else %}
+  <p class="crumb"><a href="/">‹ 今天想做什么菜？</a></p>
   <div class="ai-result">
     <div class="ai-result-head">
-      <h2>「{{ result.dish }}」拆解结果{% if result.dish != result.user_dish %}<small class="meta">（你写的是「{{ result.user_dish }}」）</small>{% endif %}</h2>
+      <h1>{{ result.dish }}怎么做{% if result.dish != result.user_dish %}<small class="meta">（你写的是「{{ result.user_dish }}」）</small>{% endif %}</h1>
       {% if result.mode == 'AI+规则' %}
       <span class="mode-tag ai">✨ AI+规则：AI 出初稿，稳厨经验库核对锅具</span>
-      {% if result.cached %}<span class="meta">♻️ 这道菜之前拆过，直接用存下的结果，没再调 AI</span>{% endif %}
       {% elif result.mode == '稳厨菜谱' %}
-      <span class="mode-tag ai">📖 稳厨菜谱：站内已有这道菜，食材、锅具按菜谱来</span>
+      <span class="mode-tag ai">📖 稳厨菜谱：站内已有这道菜，食材、锅具、步骤按菜谱来</span>
       {% else %}
       <span class="mode-tag rule">🧭 规则兜底：{% if result.ai_error %}{{ result.ai_error }}{% if '稳厨经验库' not in result.ai_error %}，先用稳厨经验库{% endif %}{% else %}这次没用 AI，只靠稳厨经验库{% endif %}</span>
       {% endif %}
     </div>
+    <div class="ai-notes">
+    {% if result.cached %}<p class="meta">♻️ 这道菜之前有人问过，直接用存下的结果，没再调 AI</p>{% endif %}
     {% if result.alias_used %}<p class="sample-note green">🔗 你写的「{{ result.user_dish }}」就是「{{ result.dish }}」，按标准名处理。</p>{% endif %}
     {% if result.known_only %}<p class="meta">✅ 你选的是稳厨已有的菜，这次没调 AI。</p>{% endif %}
-    {% if result.ai_meta.deduped %}<p class="sample-note green">🧩 AI 认出这道菜的标准名是「{{ result.ai_meta.deduped }}」，稳厨已经拆过，直接用那一份；你的叫法「{{ result.user_dish }}」已记成别名，下次不用再问 AI。</p>{% endif %}
-    {% if result.ai_meta.canonical %}<p class="meta">🧩 AI 认出标准名是「{{ result.ai_meta.canonical }}」，按这个名字存进了菜谱库，你的叫法记成别名。</p>{% endif %}
-    {% if result.ai_meta.site_alias %}<p class="meta">🧩 AI 认出这就是稳厨菜谱里的「{{ result.ai_meta.site_alias }}」，下次输入这个叫法会直接用菜谱。</p>{% endif %}
-    {% if result.personal %}<p class="sample-note">🎯 你的补充说明里有「{{ result.personal }}」，会改变锅具或做法，所以{% if result.mode == 'AI+规则' %}按你的条件单独请 AI 拆了一次，这份结果不存进菜谱库{% else %}本该单独请 AI 按条件拆，但这次 AI 没用上，下面是标准拆法，请自己按条件调整{% endif %}。</p>{% endif %}
-    {% if result.taste_note %}<p class="meta">👅 口味要求「{{ result.taste_note }}」不改变锅具和做法，下面是这道菜的标准拆法，做的时候自己调口味。</p>{% endif %}
+    {% if result.ai_meta.deduped %}<p class="sample-note green">🧩 AI 认出这道菜的标准名是「{{ result.ai_meta.deduped }}」，稳厨之前问过，直接用那一份；你的叫法「{{ result.user_dish }}」已记下，审核通过后会出现在联想里。</p>{% endif %}
+    {% if result.ai_meta.canonical %}<p class="meta">🧩 AI 认出标准名是「{{ result.ai_meta.canonical }}」，按这个名字存进了菜谱库；你的叫法已记下，等审核。</p>{% endif %}
+    {% if result.ai_meta.site_alias %}<p class="meta">🧩 AI 认出这就是稳厨菜谱里的「{{ result.ai_meta.site_alias }}」（你的叫法已记下，审核通过后输入它会直接用菜谱）。</p>{% endif %}
+    {% if result.personal %}<p class="sample-note">🎯 你的补充说明里有「{{ result.personal }}」，会改变锅具或做法，所以{% if result.mode == 'AI+规则' %}按你的条件单独请 AI 查了一次，这份结果不存进菜谱库{% else %}本该单独请 AI 按条件查，但这次 AI 没用上，下面是标准做法，请自己按条件调整{% endif %}。</p>{% endif %}
+    {% if result.taste_note %}<p class="meta">👅 口味要求「{{ result.taste_note }}」不改变锅具和做法，下面是这道菜的标准做法，做的时候自己调口味。</p>{% endif %}
     {% if result.nearby %}<p class="meta">相近的稳厨已有菜：{% for n in result.nearby %}<a href="/dish-ai?known=1&dish={{ n|urlencode }}">{{ n }}</a>{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
     {% if result.matched %}<p class="meta">参考了：{{ result.matched }}{% if result.site_id %} · <a href="/recipe/{{ result.site_id }}">看完整菜谱和步骤 →</a>{% endif %}</p>{% endif %}
+    </div>
 
     {% if result.empty %}
     <div class="empty-state">
@@ -63,18 +51,17 @@
       <p class="hint">可以在「补充说明」里写上做法（比如：红烧、清蒸、炒），或者打开 AI 再试一次。</p>
     </div>
     {% else %}
-    <div class="ai-grid">
-      <div class="section">
-        <h2>🥬 食材</h2>
-        <p><strong>主料：</strong>{{ '、'.join(result.main) if result.main else '（没拆出来）' }}</p>
-        {% if result.side %}<p><strong>辅料：</strong>{{ '、'.join(result.side) }}</p>{% endif %}
-        {% if result.season %}<p><strong>调味料：</strong>{{ '、'.join(result.season) }} <span class="meta">（按家里已有，不算钱）</span></p>{% endif %}
+    <div class="card-stack">
+      <section class="dcard">
+        <h2>🥬 要买的食材</h2>
+        <p><strong>主料：</strong>{% for x in result.main %}<span class="tag">{{ x }}</span>{% else %}（没查出来）{% endfor %}</p>
+        {% if result.side %}<p><strong>辅料：</strong>{% for x in result.side %}<span class="tag">{{ x }}</span>{% endfor %}</p>{% endif %}
+        {% if result.season %}<p><strong>调味：</strong>{% for x in result.season %}<span class="tag">{{ x }}</span>{% endfor %} <span class="meta">（按家里已有，不算钱）</span></p>{% endif %}
         <p><strong>关键做法：</strong>{% for m in result.methods %}<span class="chip red">{{ m }}</span> {% else %}（没认出做法）{% endfor %}</p>
-        {% if result.tips %}<p class="sample-note green">💡 {{ result.tips }}</p>{% endif %}
-      </div>
+      </section>
 
-      <div class="section gear">
-        <h2>🍳 要用的锅具</h2>
+      <section class="dcard gear">
+        <h2>🍳 要用的锅</h2>
         <ul class="cook-list">
           {% for c in result.cookware %}
           <li class="{% if c.have %}have-item{% elif c.is_pot and result.know_pots %}lack-item{% endif %}">
@@ -90,90 +77,70 @@
           {% endfor %}
         </ul>
         {% if result.dropped %}<p class="meta">AI 另外提到 {{ result.dropped|length }} 件（{{ '、'.join(result.dropped) }}），稳厨经验库不认识，先不列。</p>{% endif %}
-      </div>
-    </div>
+      </section>
 
-    <div class="section">
-      <h2>🏠 对照我的厨房</h2>
-      {% if result.know_pots %}
-      <p>你家已有：{{ '、'.join(mine) }}（<a href="/profile?edit=1">改锅具</a>）</p>
-      {% if result.have %}<p class="have-line">✅ 已经有：{{ '、'.join(result.have) }}</p>{% endif %}
-      {% if result.missing %}<p class="lack-line">🛒 还缺：{{ '、'.join(result.missing) }}</p>
-      {% else %}<p class="have-line">👍 锅都齐了，买食材就能做。</p>{% endif %}
-      {% else %}
-      <p class="hint">还没填厨房画像，不知道你家有什么锅，所以锅具先不算钱。<a href="/profile?edit=1">填一下锅具</a>，就能看到「已有 / 还缺」。</p>
-      {% endif %}
-      {% if result.cost %}
-      <div class="ai-cost">
-        <p class="big">补齐约 <strong>¥{{ result.cost.total }}</strong></p>
-        <p class="meta">食材 ¥{{ result.cost.ingredients }}{% if result.know_pots %} + 还缺的锅 ¥{{ result.cost.cookware }}{% else %}（锅具未计）{% endif %}</p>
-      </div>
-      <details>
-        <summary>看食材怎么估的</summary>
-        <table class="shop-table">
-          <tr><th>食材</th><th>按什么买</th><th>示例价</th></tr>
-          {% for row in result.rows %}
-          <tr{% if row.at_home %} class="done"{% endif %}><td>{{ row.raw }}</td>
-            <td>{% if row.matched %}{{ row.name }}{% if row.unit %}（{{ row.unit }}）{% endif %}{% else %}<span class="meta">商品表里还没有，按默认示例价</span>{% endif %}</td>
-            <td>{% if row.at_home %}家里已有{% else %}¥{{ row.price }}{% endif %}</td></tr>
+      <section class="dcard">
+        <h2>🧾 你家还缺什么</h2>
+        {% if result.know_pots %}
+        <p>你家已有：{% for m in mine %}<span class="tag ok">{{ m }}</span>{% endfor %}</p>
+        {% if result.missing %}<p class="lack-line">🛒 还缺：{{ '、'.join(result.missing) }}</p>
+        {% else %}<p class="have-line">👍 锅都齐了，买食材就能做。</p>{% endif %}
+        {% else %}
+        <p class="hint">还没填厨房画像，不知道你家有什么锅，所以锅具先不算钱。<a href="/profile?edit=1">填一下锅具</a>，就能看到「已有 / 还缺」。</p>
+        {% endif %}
+        {% if result.cost %}
+        <div class="ai-cost">
+          <p class="big">补齐约 <strong>¥{{ result.cost.total }}</strong></p>
+          <p class="meta">食材 ¥{{ result.cost.ingredients }}{% if result.know_pots %} + 还缺的锅 ¥{{ result.cost.cookware }}{% else %}（锅具未计）{% endif %}</p>
+        </div>
+        <details>
+          <summary>看食材怎么估的</summary>
+          <table class="shop-table">
+            <tr><th>食材</th><th>按什么买</th><th>示例价</th></tr>
+            {% for row in result.rows %}
+            <tr{% if row.at_home %} class="done"{% endif %}><td>{{ row.raw }}</td>
+              <td>{% if row.matched %}{{ row.name }}{% if row.unit %}（{{ row.unit }}）{% endif %}{% else %}<span class="meta">商品表里还没有，按默认示例价</span>{% endif %}</td>
+              <td>{% if row.at_home %}家里已有{% else %}¥{{ row.price }}{% endif %}</td></tr>
+            {% endfor %}
+          </table>
+        </details>
+        <p class="budget-note">🧺 算法和「本餐预算」一样：还缺的食材 + 画像里还缺的锅，调味料按家里已有。油温计、漏勺这类小工具不计。价格都是示例价，只是估个大概。</p>
+        {% endif %}
+      </section>
+
+      <section class="dcard">
+        <h2>👣 步骤{% if not result.site_steps %}（要点）{% endif %}</h2>
+        {% if result.site_steps %}
+        <ol class="mini-steps">
+          {% for st in result.site_steps %}
+          <li><b>{{ st.title }}</b> {{ st.action }}{% if st.safety_tip %}<span class="warn">⚠️ {{ st.safety_tip }}</span>{% endif %}</li>
           {% endfor %}
-        </table>
-      </details>
-      <p class="budget-note">🧺 算法和「本餐预算」一样：还缺的食材 + 画像里还缺的锅，调味料按家里已有。油温计、漏勺这类小工具不计。价格都是示例价，只是估个大概。</p>
-      {% endif %}
+        </ol>
+        {% elif result.steps %}
+        <ol class="mini-steps">
+          {% for st in result.steps %}<li>{{ st }}</li>{% endfor %}
+        </ol>
+        {% else %}
+        <p class="hint">这道菜还没有详细步骤。关键做法：{{ '、'.join(result.methods) or '（没认出）' }}。</p>
+        {% endif %}
+        {% if result.tips %}<p class="sample-note green">💡 {{ result.tips }}</p>{% endif %}
+        {% if not result.site_steps and result.steps %}<p class="meta">步骤由 AI 生成，仅供参考；动火、用刀注意安全。</p>{% endif %}
+      </section>
+    </div>
+    <div class="result-actions">
+      {% if result.site_id %}<a class="btn btn-primary btn-lg" href="/recipe/{{ result.site_id }}">看完整菜谱 · 一键备齐 →</a>{% endif %}
+      <a class="btn btn-ghost btn-lg" href="/profile?edit=1">改我家的锅</a>
     </div>
     {{ shopui.disclaimer(shop_cfg) }}
     {% endif %}
   </div>
+  <section class="ask-again">
+    <h2>再问一道菜</h2>
+    {% include '_ask_box.html' %}
+  </section>
   {% endif %}
-  <p class="ai-note">AI 拆菜结果仅供参考：AI 的初稿会被稳厨经验库核对，锅具以规则为准；不认识的锅具不会列出来。</p>
+  <p class="ai-note">结果仅供参考：AI 的初稿会被稳厨经验库核对，锅具以规则为准；不认识的锅具不会列出来。</p>
 </div>
-<script>
-(function () {
-  const form = document.getElementById('dish-ai-form');
-  // 联想：只是辅助，接口出错或没结果就什么都不显示，不挡提交
-  const input = document.getElementById('dish-input');
-  const box = document.getElementById('dish-suggest');
-  let timer = null, seq = 0;
-  function hide() { box.hidden = true; box.innerHTML = ''; }
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (!q) { hide(); return; }
-    timer = setTimeout(async () => {
-      const my = ++seq;
-      try {
-        const r = await fetch('/dish-ai/suggest?q=' + encodeURIComponent(q));
-        const data = await r.json();
-        if (my !== seq) return;
-        if (!data.items.length) { hide(); return; }
-        box.innerHTML = '';
-        data.items.forEach(it => {
-          const a = document.createElement('a');
-          a.href = it.url; a.className = 'suggest-item'; a.setAttribute('role', 'option');
-          const n = document.createElement('strong'); n.textContent = it.name;
-          const t = document.createElement('span'); t.className = 'tag'; t.textContent = '（稳厨已有）';
-          const k = document.createElement('span'); k.className = 'kind ' + it.kind; k.textContent = it.label;
-          a.append(n, t, k);
-          box.appendChild(a);
-        });
-        box.hidden = false;
-      } catch (e) { hide(); }
-    }, 150);
-  });
-  input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
-  document.addEventListener('click', e => { if (!box.contains(e.target) && e.target !== input) hide(); });
-  form.querySelectorAll('[data-dish]').forEach(a => a.addEventListener('click', e => {
-    e.preventDefault();
-    form.dish.value = a.dataset.dish;
-    form.requestSubmit();
-  }));
-  form.addEventListener('submit', () => {
-    const b = document.getElementById('ai-submit');
-    b.textContent = '正在拆菜…（AI 最多等 20 秒）';
-    b.disabled = true;
-  });
-})();
-</script>
+{% include '_footer.html' %}
 </body>
 </html>

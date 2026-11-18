@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+{% include '_head.html' %}
+  <title>这张照片是什么菜？ - 稳厨</title>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="page photo-page">
+  <p class="crumb"><a href="/">‹ 今天想做什么菜？</a></p>
+  <h1>这张照片是什么菜？</h1>
+  {% if guess %}
+  <div class="guess-card">
+    <div class="guess-row">
+      <img id="photo-preview" alt="你刚拍的照片（只在你手机上显示）" hidden>
+      <div>
+        <p class="meta">看起来像</p>
+        <p class="guess-name">{{ guess.dish_name }}</p>
+        <span class="chip {{ 'green' if level == '高' else ('amber' if level == '中' else 'red') }}">把握：{{ level }}</span>
+      </div>
+    </div>
+    <div class="guess-actions">
+      {% if site_id %}
+      <a class="btn btn-primary btn-lg" href="/recipe/{{ site_id }}">对，就是它 →</a>
+      {% else %}
+      <form method="post" action="/dish-ai"><input type="hidden" name="dish" value="{{ guess.dish_name }}"><button type="submit" class="btn btn-primary btn-lg">对，就是它 →</button></form>
+      {% endif %}
+      <a class="btn btn-ghost btn-lg" href="#fix" id="fix-btn">不对，我来改</a>
+    </div>
+  </div>
+  <form method="post" action="/dish-ai" class="fix-form" id="fix">
+    <label>不对的话，改一下菜名
+      <input type="text" name="dish" maxlength="20" required placeholder="比如 扬州炒饭" value="">
+    </label>
+    <button type="submit" class="btn btn-ghost">用这个菜名 →</button>
+  </form>
+  {% else %}
+  <div class="guess-card fail">
+    <p class="guess-fail">😅 这次没认出来{% if error %}：{{ error }}{% endif %}。</p>
+    <p>请直接打菜名：</p>
+    <form method="post" action="/dish-ai" class="fix-form">
+      <input type="text" name="dish" maxlength="20" required placeholder="比如 宫保鸡丁" aria-label="菜名">
+      <button type="submit" class="btn btn-primary">这道菜怎么做 →</button>
+    </form>
+  </div>
+  {% endif %}
+  <p class="sample-note">🔒 照片只用来认菜：会发给 DeepSeek 认出菜名，认完就丢，稳厨不保存、不公开。AI 可能认错，以你确认的菜名为准。</p>
+</div>
+<script>
+(function () {
+  // 小图只在这个浏览器标签页里（拍照时存的），显示一次就删
+  try {
+    const src = sessionStorage.getItem('wenchu-photo-preview');
+    sessionStorage.removeItem('wenchu-photo-preview');
+    const img = document.getElementById('photo-preview');
+    if (img && src && src.startsWith('data:image/')) { img.src = src; img.hidden = false; }
+  } catch (e) {}
+  const fix = document.getElementById('fix-btn');
+  if (fix) fix.addEventListener('click', e => { e.preventDefault(); const i = document.querySelector('#fix input[name=dish]'); i.focus(); i.scrollIntoView({block: 'center'}); });
+})();
+</script>
+</body>
+</html>

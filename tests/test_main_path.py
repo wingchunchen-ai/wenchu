@@ -54,7 +54,19 @@ def recipe_links(html):
     return re.findall(r'href="/recipe/(\d+)">', html)
 
 
-PNG = b'\x89PNG\r\n\x1a\n' + b'\x00' * 64
+def make_png(w=2, h=2):
+    # 一张真的小 PNG（不靠 Pillow 生成）：上传时服务器会用 Pillow 重新保存去掉 EXIF，假 PNG 会被当成坏图
+    import struct
+    import zlib
+
+    def chunk(tag, data):
+        return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff)
+    raw = b''.join(b'\x00' + b'\xff\x80\x40' * w for _ in range(h))
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+
+
+PNG = make_png()
 
 try:
     c = app.test_client()
@@ -114,7 +126,7 @@ try:
     r = c.post('/upload', data={'name': '蛋炒饭', 'template_id': '3', 'step_action': ['炒']})
     check('和现成菜重名被拦下', r.status_code == 400 and '已经存在' in text(r))
     r = c.post('/upload', data={'name': '坏图测试', 'template_id': '3', 'step_action': ['炒'],
-                                'image': (BytesIO(b'not an image'), 'a.jpg')}, content_type='multipart/form-data')
+                                'image': (BytesIO(b'not an image'), 'a.jpg'), 'photo_consent': '1'}, content_type='multipart/form-data')
     check('不是图片的文件被拦下', r.status_code == 400 and '不是图片' in text(r))
     r = c.post('/upload', data={'name': '时间乱填', 'template_id': '3', 'step_action': ['炒'], 'time_minutes': 'abc'})
     check('时间不是数字被拦下', r.status_code == 400 and '整数' in text(r))
@@ -134,7 +146,7 @@ try:
         'step_tools': ['碗、筷子', '平底锅、锅铲', '平底锅、锅铲'],
         'step_tool_usage': ['顺一个方向搅', '中火', '中小火'],
         'step_safety_tip': ['', '油热了再下蛋，小心溅油', '番茄出汁会溅，盖一下锅盖'],
-        'image': (BytesIO(PNG), '番茄炒蛋.png'),
+        'image': (BytesIO(PNG), '番茄炒蛋.png'), 'photo_consent': '1',
     }
     r = c.post('/upload', data=form, content_type='multipart/form-data')
     loc = r.headers.get('Location', '')
@@ -198,7 +210,7 @@ try:
     h = text(c.get(f'/recipe/{xid}'))
     check('详情里菜名被转义', xss not in h and '&lt;img' in h)
     idx = open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read()
-    check('首页推荐不再用 innerHTML 拼菜名', "'</a>" not in idx and 'a.textContent = r.name' in idx)
+    check('首页今日推荐由模板转义显示菜名（不用 innerHTML、不用 |safe）', 'innerHTML' not in idx and '|safe' not in idx and xss not in text(c.get('/')))
     names = [x['name'] for x in c.get('/daily_recommend').get_json()['recipes']]
     check('推荐接口原样返回菜名（由前端当文字显示）', all(isinstance(n, str) for n in names))
     other = app.test_client()
@@ -360,7 +372,7 @@ try:
     check('详情页显示菜品图', 'src="/static/dishes/recipe-12.webp"' in text(anon.get('/recipe/12')))
     recs = shopper.get('/daily_recommend').get_json()['recipes']
     check('首页推荐带图片地址', recs and all((x['image'] or '').startswith('/static/dishes/') for x in recs if x['id'] <= 12))
-    check('首页推荐弹窗会显示小图', 'rec-thumb' in open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read())
+    check('首页今日推荐一排显示菜品图', 'src="/static/dishes/' in text(shopper.get('/')) and 'swipe-row' in text(shopper.get('/')))
 
     print('14. 收尾')
     check('交付库一个字节都没变', hashlib.md5(open(REAL_DB, 'rb').read()).hexdigest() == real_db_hash)

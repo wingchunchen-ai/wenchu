@@ -27,10 +27,9 @@
     <a href="/recommend" class="hero-btn">去看适合我的菜 →</a>
     <div class="profile-links">
       <a href="/profile?edit=1">✏️ 更改画像</a>
-      <a href="/starter">🧰 入门备厨</a>
+      <a href="/starter">🧺 先买哪口锅（入门备厨）</a>
     </div>
   </div>
-  <p class="hint"><a href="/stats">📊 导购点击统计（答辩演示用）</a></p>
   </div>
 {% else %}
   <form action="/profile" method="post" class="profile-form">
@@ -58,6 +57,7 @@
   </form>
 {% endif %}
 </div>
+{% include '_footer.html' %}
 {% include '_nav.html' %}
 </body>
 </html>

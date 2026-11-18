@@ -1,26 +1,22 @@
-  {# 顶部导航（桌面）+ 底部标签栏（手机），两者用同一组链接 #}
+  {# 顶部导航（桌面）+ 底部标签栏（手机）：按用户想干什么分成 问怎么做 / 逛菜谱 / 分享 / 我的厨房 #}
   {% set p = request.path %}
+  {% set on_ask = p == '/' or p.startswith('/dish-ai') %}
+  {% set on_browse = p in ('/recipes', '/all') or p.startswith('/recipe/') or p.startswith('/question') %}
+  {% set on_mine = p in ('/profile', '/recommend', '/starter', '/stats') %}
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="/"><span class="brand-mark">🍳</span><span class="brand-text">稳厨<small>有什么锅，就做什么菜</small></span></a>
       <nav class="top-links">
-        <a href="/recipes" {% if p == '/recipes' %}class="active"{% endif %}>放心菜谱</a>
-        <a href="/all" {% if p == '/all' %}class="active"{% endif %}>全部菜谱</a>
-        <a href="/recommend" {% if p == '/recommend' %}class="active"{% endif %}>为我推荐</a>
-        <a href="/dish-ai" {% if p == '/dish-ai' %}class="active"{% endif %}>AI 拆菜</a>
-        <a href="/starter" {% if p == '/starter' %}class="active"{% endif %}>入门备厨</a>
-        <a href="/questions" {% if p.startswith('/question') %}class="active"{% endif %}>质疑区</a>
-        <a href="/profile" {% if p == '/profile' %}class="active"{% endif %}>我的厨房</a>
+        <a href="/" {% if on_ask %}class="active"{% endif %}>问怎么做</a>
+        <a href="/recipes" {% if on_browse %}class="active"{% endif %}>逛菜谱</a>
+        <a href="/profile" {% if on_mine %}class="active"{% endif %}>我的厨房</a>
       </nav>
-      <a href="/upload" class="btn btn-primary btn-sm top-cta">＋ 上传菜谱</a>
+      <a href="/upload" class="btn btn-primary btn-sm top-cta">＋ 分享我的菜谱</a>
     </div>
   </header>
   <nav class="bottom-nav">
-    <a href="/recipes" {% if p == '/recipes' %}class="active"{% endif %}><span class="i">🍲</span>放心菜谱</a>
-    <a href="/all" {% if p == '/all' %}class="active"{% endif %}><span class="i">📖</span>全部</a>
-    <a href="/upload" class="nav-upload" title="上传菜谱">+</a>
-    <a href="/recommend" {% if p == '/recommend' %}class="active"{% endif %}><span class="i">✨</span>推荐</a>
-    <a href="/dish-ai" {% if p == '/dish-ai' %}class="active"{% endif %}><span class="i">🤖</span>拆菜</a>
-    <a href="/questions" {% if p.startswith('/question') %}class="active"{% endif %}><span class="i">💬</span>质疑区</a>
-    <a href="/profile" {% if p == '/profile' %}class="active"{% endif %}><span class="i">👤</span>我</a>
+    <a href="/" {% if on_ask %}class="active"{% endif %}><span class="i">🔍</span>问怎么做</a>
+    <a href="/recipes" {% if on_browse %}class="active"{% endif %}><span class="i">📖</span>逛菜谱</a>
+    <a href="/upload" class="nav-upload{% if p == '/upload' %} active{% endif %}" title="分享我的菜谱" aria-label="分享我的菜谱">+</a>
+    <a href="/profile" {% if on_mine %}class="active"{% endif %}><span class="i">👤</span>我的厨房</a>
   </nav>

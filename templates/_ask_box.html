@@ -1,0 +1,28 @@
+{# 「今天想做什么菜？」大输入框：打字联想 + 📷拍照 / 🖼相册。首页和「这道菜怎么做」页共用 #}
+<form method="post" action="/dish-ai" class="ask-box" id="ask-form">
+  <div class="ask-line">
+    <span class="suggest-wrap">
+      <input type="text" name="dish" id="dish-input" maxlength="20" required autocomplete="off" enterkeyhint="search"
+             placeholder="说个菜名，比如 宫保鸡丁" value="{{ dish or '' }}" aria-label="菜名"
+             aria-autocomplete="list" aria-controls="dish-suggest">
+      <span class="suggest-box" id="dish-suggest" role="listbox" hidden></span>
+    </span>
+    <label class="cam-btn" for="photo-camera" title="拍照认菜"><span aria-hidden="true">📷</span><small>拍照</small></label>
+    <label class="cam-btn" for="photo-album" title="从相册选"><span aria-hidden="true">🖼</span><small>相册</small></label>
+  </div>
+  {% if ask_full %}
+  <label class="ask-extra">补充说明（可选）
+    <input type="text" name="description" maxlength="100" placeholder="比如：不要太辣、家里没有炒锅" value="{{ description or '' }}">
+  </label>
+  <label class="check ask-extra"><input type="checkbox" name="rules_only" value="1" {% if rules_only %}checked{% endif %}> 只用稳厨经验库（不调 AI，断网也能演示）</label>
+  {% endif %}
+  <button type="submit" class="btn btn-primary btn-lg ask-go" id="ai-submit">这道菜怎么做 →</button>
+</form>
+<form method="post" action="/dish-ai/photo" enctype="multipart/form-data" id="photo-form" class="photo-form">
+  <input type="file" name="photo" id="photo-camera" accept="image/*" capture="environment" class="vh">
+  <input type="file" name="photo" id="photo-album" accept="image/*" class="vh">
+  <noscript><button type="submit" class="btn btn-ghost btn-sm">认这张照片</button></noscript>
+</form>
+<p class="meta ask-note">📷 拍照认菜：照片会发给 DeepSeek 认出菜名，认完就丢，稳厨不保存。</p>
+<div class="busy" id="busy" hidden><div class="busy-box"><span class="spin" aria-hidden="true"></span><p id="busy-text">正在认菜…</p></div></div>
+<script src="/static/ask.js?v=1" defer></script>

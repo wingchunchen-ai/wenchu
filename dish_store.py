@@ -22,6 +22,8 @@
 #   alias_key          叫法归一化后的写法，主键
 #   canonical_key      指向的标准名（归一化），可能是站内菜、经验库常见菜或 dish_breakdowns 里的菜
 #   source             'seed' 种子（dish_match.SEED_ALIASES）/ 'ai' AI 认出的标准名 / 'migrated' 旧数据迁过来的
+#   status             'active' 生效（对齐菜名、进联想）/ 'pending' 待审核（AI 提的新叫法，审核前不生效、不进联想）
+#                      种子和迁移来的别名直接 active；AI 提的一律 pending，用 python tools/aliases.py 审核
 #   created_at         UTC
 #
 # 表 dish_ai_calls —— 每一次真正发出去的 AI 请求一条（缓存命中不记），限额就数这张表
@@ -73,10 +75,15 @@ def init_tables(conn):
         alias_key TEXT PRIMARY KEY,
         canonical_key TEXT NOT NULL,
         source TEXT NOT NULL DEFAULT 'seed',
+        status TEXT NOT NULL DEFAULT 'active',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )''')
+    if 'status' not in [r[1] for r in conn.execute('PRAGMA table_info(dish_aliases)')]:
+        # 旧表没有审核状态：补上这一列；以前 AI 自动加的别名改成待审核（和知识库设计一致：AI 提的要人审）
+        conn.execute("ALTER TABLE dish_aliases ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        conn.execute("UPDATE dish_aliases SET status = 'pending' WHERE source = 'ai'")
     for alias, canon in dish_match.SEED_ALIASES.items():
-        conn.execute("INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source) VALUES (?, ?, 'seed')",
+        conn.execute("INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source, status) VALUES (?, ?, 'seed', 'active')",
                      (normalize_dish(alias), normalize_dish(canon)))
     cols = [r[1] for r in conn.execute('PRAGMA table_info(dish_breakdowns)')]
     if cols and 'canonical_key' not in cols:
@@ -119,21 +126,41 @@ def normalize_dish(name):
 
 
 def resolve_alias(conn, name_or_key):
-    # 叫法 → 标准名（归一化）；别名表里没有就是它自己
+    # 叫法 → 标准名（归一化）；只认已生效（active）的别名，待审核的不算；别名表里没有就是它自己
     key = normalize_dish(name_or_key)
-    row = conn.execute('SELECT canonical_key FROM dish_aliases WHERE alias_key = ?', (key,)).fetchone()
+    row = conn.execute("SELECT canonical_key FROM dish_aliases WHERE alias_key = ? AND status = 'active'", (key,)).fetchone()
     return row[0] if row else key
 
 
 def add_alias(conn, alias, canonical_key, source='ai'):
+    # AI 提的新叫法先放「待审核」，审核通过前不对齐、不进联想；种子 / 迁移来的直接生效
     a = normalize_dish(alias)
     if a and a != canonical_key:
-        conn.execute('INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source) VALUES (?, ?, ?)',
-                     (a, canonical_key, source))
+        status = 'pending' if source == 'ai' else 'active'
+        conn.execute('INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source, status) VALUES (?, ?, ?, ?)',
+                     (a, canonical_key, source, status))
 
 
 def alias_map(conn):
-    return {r[0]: r[1] for r in conn.execute('SELECT alias_key, canonical_key FROM dish_aliases')}
+    # 联想、对齐用的别名：只有已生效的
+    return {r[0]: r[1] for r in conn.execute("SELECT alias_key, canonical_key FROM dish_aliases WHERE status = 'active'")}
+
+
+def pending_aliases(conn):
+    # 待审核的别名：[(叫法, 指向的标准名, 来源, 时间)]
+    return [tuple(r) for r in conn.execute(
+        "SELECT alias_key, canonical_key, source, created_at FROM dish_aliases WHERE status = 'pending' ORDER BY created_at, alias_key")]
+
+
+def review_alias(conn, alias, approve=True):
+    # 审核一条待审核别名：通过 → active；不通过 → 删掉。返回是否改到了
+    a = normalize_dish(alias)
+    if approve:
+        cur = conn.execute("UPDATE dish_aliases SET status = 'active' WHERE alias_key = ? AND status = 'pending'", (a,))
+    else:
+        cur = conn.execute("DELETE FROM dish_aliases WHERE alias_key = ? AND status = 'pending'", (a,))
+    conn.commit()
+    return cur.rowcount > 0
 
 
 def cached_names(conn):
@@ -185,7 +212,7 @@ def limit_reason(conn, visitor, day=None):
         return '今天全站的 AI 次数已用完，先用稳厨经验库'
     limit = per_ip_daily()
     if limit and conn.execute('SELECT COUNT(*) FROM dish_ai_calls WHERE day = ? AND visitor = ?', (day, visitor)).fetchone()[0] >= limit:
-        return f'你今天的 {limit} 次 AI 拆菜已用完，先用稳厨经验库（明天再来）'
+        return f'你今天的 {limit} 次 AI 已用完，先用稳厨经验库（明天再来）'
     return None
 
 

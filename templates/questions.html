@@ -2,12 +2,12 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
-  <title>质疑区 - 稳厨</title>
+  <title>大家的疑问 - 稳厨</title>
 </head>
 <body>
 <div class="page">
-    <h1>质疑区</h1>
-    <p class="hint">照着做出了问题，就在菜谱详情页提质疑；其他人可以站队判断质疑对不对。</p>
+    <h1>大家的疑问</h1>
+    <p class="hint">照着做出了问题，就在菜谱详情页提出疑问（质疑）；其他人可以站队判断疑问对不对。被质疑的菜暂时不在「放心菜」里。</p>
     {% include '_flash.html' %}
     {% if questions %}
     <ul class="q-list">
@@ -22,6 +22,7 @@
     <p>暂时还没有被质疑的菜谱。</p>
     {% endif %}
 </div>
+{% include '_footer.html' %}
 {% include '_nav.html' %}
 </body>
 </html>

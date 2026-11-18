@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, session, redirect, flash, send_from_directory#引入网站和显示页面的功能，flash 用来给下一页带一句提示
+from flask import Flask, Request, render_template, request, session, redirect, flash, send_from_directory#引入网站和显示页面的功能，flash 用来给下一页带一句提示
 import os#拼路径、读环境变量
+import io#上传的文件只放内存（拍照认菜的照片不落盘）
+import random#首页今日推荐：按日期固定打乱
 import json#AI 拆菜记录里存的是 JSON
 import uuid#给上传的图片起一个不会重名的文件名
 import sqlite3#引入sql数据库
@@ -8,6 +10,11 @@ import dish_ai#AI 拆菜：DeepSeek 初稿 + 稳厨经验库（dish_rules.py）�
 import dish_store#AI 拆菜的记录（也当缓存）和调用限额
 import dish_match#菜名对齐：别名、联想、个性化条件
 import dish_rules#经验库里的常见菜（联想用）
+import dish_vision#拍照认菜：照片只在内存里交给 DeepSeek 认菜名，认完就丢
+try:
+    from PIL import Image, ImageOps#有 Pillow 就在保存分享的照片前去掉 EXIF（含拍摄地点）
+except ImportError:  # pragma: no cover
+    Image = None
 from urllib.parse import quote#联想链接里的菜名要转码
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
@@ -99,11 +106,18 @@ def init_db():
         conn.commit()
     finally:
         conn.close()#不管成没成功都关库
+class InMemoryRequest(Request):
+    # 上传的文件一律放在内存里（Flask 默认超过 500KB 会先写进临时文件）：
+    # 拍照认菜的照片因此从头到尾不落盘；整站上传上限 5MB，放内存没问题
+    def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
+        return io.BytesIO()
 app = Flask(__name__)#创建flask应用
+app.request_class = InMemoryRequest
 # 密钥：线上请在环境变量 SECRET_KEY 里设一个长的随机字符串；没设就用演示用的固定字符串
 app.secret_key = os.environ.get('SECRET_KEY', 'wenchu')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 上传最大 5MB，再大就提示换小图
 ALLOWED_IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+HEIC_EXT = {'.heic', '.heif'}
 # 时间三档，列表页和筛选共用
 TIME_FILTERS = ['15分钟以内', '15到30分钟', '30分钟以上']
 def current_user():
@@ -143,9 +157,33 @@ def vote_stats(conn):
             'rate': round(r['likes'] / r['total'] * 100) if r['total'] else None,
         }
     return stats
-@app.route('/')#首页地址
+def todays_picks(user, limit=8):
+    # 首页「今日推荐」：填了锅具就只推能做的菜，没填就推全部放心菜；按伦敦日期固定打乱，一天内顺序不变
+    mine = user_cookware(user)
+    conn = get_db()
+    try:
+        rows = conn.execute('''SELECT * FROM recipes WHERE id NOT IN (SELECT recipe_id FROM questions) ORDER BY id''').fetchall()
+        picks = []
+        for r in rows:
+            steps = conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (r['id'],)).fetchall()
+            need = shop.pots_needed(shop.recipe_tools_text(r, steps))
+            if mine and not set(need) <= set(mine):
+                continue
+            picks.append({'id': r['id'], 'name': r['name'], 'image': r['image'], 'time_minutes': r['time_minutes']})
+        stats = vote_stats(conn)
+    finally:
+        conn.close()
+    for p in picks:
+        p['rate'] = stats.get(p['id'], {}).get('rate')
+    random.Random(dish_store.london_day() + '|' + str(user['id'] if user else 0)).shuffle(picks)
+    return picks[:limit], bool(mine)
+QUICK_CHIPS = [('🍳', '我家的锅能做啥', '/recommend'), ('💰', '30元以内', '/recipes?budget=30'),
+               ('⏱', '15分钟', '/recipes?time=' + quote('15分钟以内')), ('🧺', '先买哪口锅', '/starter')]
+@app.route('/')#首页地址：一个大输入框「今天想做什么菜？」+ 拍照 / 相册 + 快捷入口 + 今日推荐
 def home():#定义home函数
-    return render_template('index.html')
+    user = current_user()
+    picks, by_pots = todays_picks(user)
+    return render_template('index.html', picks=picks, by_pots=by_pots, chips=QUICK_CHIPS)
 def list_recipes(only_normal, base_path, title):
     # 总菜谱和正常菜谱共用：都能搜索、按分类、按时间筛，不用先填画像
     # only_normal=True 时只显示没被质疑的菜
@@ -197,14 +235,13 @@ def list_recipes(only_normal, base_path, title):
                            categories=categories, time_filters=TIME_FILTERS, budgets=shop.BUDGETS,
                            q=q, category=category, time_filter=time_filter, budget=budget,
                            know_pots=bool(mine), shop_cfg=catalog)
-# 总表：全部菜谱，不管有没有被质疑
+# 逛菜谱：/recipes 和 /all 是同一页，「只看放心菜」开关打开 = /recipes（默认），关掉 = /all（包括正在被质疑的菜）
 @app.route('/all')
 def all_recipes():
-    return list_recipes(False, '/all', '全部菜谱')
-# 放心菜谱（原来叫正常菜谱）：没被质疑的菜，也能搜索和分类筛选；不再要求先填画像
+    return list_recipes(False, '/all', '逛菜谱')
 @app.route('/recipes')
 def recipes():
-    return list_recipes(True, '/recipes', '放心菜谱')
+    return list_recipes(True, '/recipes', '逛菜谱')
 # 菜谱详情路由：网址是 /recipe/1、/recipe/2 这样，数字就是菜的 id
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
@@ -460,6 +497,8 @@ def save_image(image_file):
     if not image_file or not image_file.filename:
         return None, None
     ext = os.path.splitext(image_file.filename)[1].lower()  # 中文文件名也能拿到后缀
+    if ext in HEIC_EXT:
+        return None, '苹果的 HEIC 格式暂时不支持，可以截个屏再传，或在「设置 → 相机 → 格式」选「兼容性最佳」'
     if ext not in ALLOWED_IMAGE_EXT:
         return None, '图片只支持 jpg、png、webp、gif'
     head = image_file.stream.read(16)  # 看文件开头几个字节，确认真的是图片
@@ -470,8 +509,31 @@ def save_image(image_file):
         return None, '这个文件看起来不是图片，请换一张'
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     filename = uuid.uuid4().hex + ('.jpg' if ext == '.jpeg' else ext)  # 随机文件名，不会互相覆盖
-    image_file.save(os.path.join(UPLOAD_DIR, filename))
+    data = image_file.stream.read()
+    if Image is not None and ext != '.gif':
+        try:
+            data = strip_exif(data, ext)  # 去掉 EXIF（拍摄地点、机型），只留画面
+        except Exception:
+            return None, '这张图片打不开，请换一张'
+    with open(os.path.join(UPLOAD_DIR, filename), 'wb') as out:
+        out.write(data)
     return '/uploads/' + filename, None
+def strip_exif(data, ext):
+    # 按 EXIF 方向摆正后重新保存，新文件不带 EXIF / GPS
+    fmt = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.webp': 'WEBP'}[ext]
+    with Image.open(io.BytesIO(data)) as im:
+        im = ImageOps.exif_transpose(im)
+        if fmt == 'JPEG' and im.mode not in ('RGB', 'L'):
+            im = im.convert('RGB')
+        buf = io.BytesIO()
+        im.save(buf, fmt, **({'quality': 90} if fmt in ('JPEG', 'WEBP') else {}))
+    return buf.getvalue()
+def consented_image():
+    # 分享菜谱的照片：勾了「同意公开这张照片」才存；没勾就当没传，返回 (文件, 是否因为没勾而丢掉)
+    f = first_file('image')
+    if f and request.form.get('photo_consent') != '1':
+        return None, True
+    return f, False
 def remove_image(image_path):
     # 删掉之前上传的图片文件（只删 /uploads/ 下的，别的不动）
     if image_path and image_path.startswith('/uploads/'):
@@ -493,8 +555,9 @@ def upload():  # 函数
     if request.method == 'POST':  # 如果是提交表单（点上传）
         data, steps, errors = read_recipe_form()  # 后台再检查一次，不能只靠浏览器拦
         image_path, image_error = (None, None)
+        image_file, dropped_photo = consented_image()
         if not errors:
-            image_path, image_error = save_image(request.files.get('image'))
+            image_path, image_error = save_image(image_file)
         if image_error:
             errors.append(image_error)
         if errors:
@@ -522,6 +585,8 @@ def upload():  # 函数
             flash('上传成功！')
         else:
             flash('上传成功！先保存厨房画像再上传，以后就能自己修改和删除这道菜。')
+        if dropped_photo:
+            flash('你没勾「同意公开这张照片」，照片没有保存。')
         return redirect(f'/recipe/{recipe_id}')  # 保存完跳到刚传的这道菜
     return render_template('upload.html', form={}, steps=[], categories=get_categories())  # GET 就显示空表单
 @app.route('/delete/<int:recipe_id>', methods=['POST'])  # 删除菜的路由，只接受 POST
@@ -565,8 +630,9 @@ def edit_recipe(recipe_id):  # 函数
         if request.method == 'POST':
             data, steps, errors = read_recipe_form()
             image_path, image_error = (None, None)
+            image_file, dropped_photo = consented_image()
             if not errors:
-                image_path, image_error = save_image(request.files.get('image'))
+                image_path, image_error = save_image(image_file)
             if image_error:
                 errors.append(image_error)
             if errors:
@@ -587,7 +653,7 @@ def edit_recipe(recipe_id):  # 函数
                 return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories()), 400
             if image_path:
                 remove_image(recipe['image'])  # 换了新图，旧图删掉
-            flash('修改已保存。')
+            flash('修改已保存。' + ('你没勾「同意公开这张照片」，新照片没有保存。' if dropped_photo else ''))
             return redirect(f'/recipe/{recipe_id}')
         steps = [dict(r) for r in conn.execute('SELECT title, action, tools, tool_usage, safety_tip FROM recipe_steps WHERE recipe_id = ? ORDER BY step_no', (recipe_id,))]
     finally:
@@ -689,7 +755,7 @@ def dish_candidates(conn, known):
 def canonical_display(key, cands):
     # 标准名（归一化）→ 显示用的名字；不在「稳厨已有」里就返回 None
     return next((n for n in cands if dish_match.normalize(n) == key), None)
-SUGGEST_LABELS = {'site': '稳厨菜谱', 'cached': '拆过', 'common': '经验库'}
+SUGGEST_LABELS = {'site': '稳厨菜谱', 'cached': '查过', 'common': '经验库'}
 def ai_draft_provider(visitor, canon_name, canon_key, user_dish, description, personal, known_only, cands):
     # 给 dish_ai.analyze 用的「AI 初稿」：
     # 1) 没有个性化条件：先按标准名找存下的记录（免费、不占次数）
@@ -758,10 +824,14 @@ def dish_ai_suggest():
         return {'items': []}
     conn = get_db()
     try:
-        cands, aliases = dish_candidates(conn, known_recipes_for_rules(conn))
+        known_site = known_recipes_for_rules(conn)
+        cands, aliases = dish_candidates(conn, known_site)
     finally:
         conn.close()
-    items = [{'name': n, 'kind': k, 'label': SUGGEST_LABELS[k], 'url': '/dish-ai?known=1&dish=' + quote(n)}
+    site_ids = {r['name']: r['id'] for r in known_site}
+    # 站内 12 道菜（和用户上传的菜）直接去菜谱详情；其余用现成结果（零 AI）
+    items = [{'name': n, 'kind': k, 'label': SUGGEST_LABELS[k],
+              'url': f'/recipe/{site_ids[n]}' if k == 'site' and n in site_ids else '/dish-ai?known=1&dish=' + quote(n)}
              for n, k, _ in dish_match.suggest(q, cands, aliases)]
     return {'items': items}
 @app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：一个输入框，先对齐已有菜，再走缓存 / AI
@@ -798,11 +868,57 @@ def dish_ai_page():
         result['personal'] = personal
         result['taste_note'] = description if description and not personal and not rules_only else ''
         result['known_only'] = known_only
+        if result.get('site_id'):  # 站内菜：步骤直接用菜谱里的
+            conn = get_db()
+            try:
+                result['site_steps'] = [dict(r) for r in conn.execute(
+                    'SELECT title, action, safety_tip FROM recipe_steps WHERE recipe_id = ? ORDER BY step_no', (result['site_id'],))]
+            finally:
+                conn.close()
         if canon_name not in cands and not meta:  # 没对上已有的菜，AI 也没帮忙对齐：列几个相近的（不靠 JS 也能看到）
             result['nearby'] = [n for n, _, sc in dish_match.suggest(dish, cands, aliases, 4) if sc >= 40]
     return render_template('dish_ai.html', result=result, dish=dish, description=description, rules_only=rules_only,
                            mine=mine, shop_cfg=catalog, per_ip=dish_store.per_ip_daily(),
                            examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
+def first_file(field):
+    # 拍照和相册是两个同名输入框，取第一个真的选了文件的
+    return next((f for f in request.files.getlist(field) if f and f.filename), None)
+@app.route('/dish-ai/photo', methods=['POST'])  # 拍照认菜：认出菜名 → 用户确认 → 再走「这道菜怎么做」
+def dish_photo():
+    f = first_file('photo')
+    data = f.read() if f else b''  # 照片只在内存里：不存硬盘、不进数据库、不写日志
+    f = None
+    guess, error, site_id = None, '', None
+    try:
+        b64, mime = dish_vision.prepare(data)
+    except dish_vision.PhotoError as e:
+        error, b64 = str(e), None
+    data = None
+    if b64:
+        conn = get_db()
+        try:
+            visitor = dish_store.visitor_id(client_ip(), app.secret_key)
+            reason = dish_store.limit_reason(conn, visitor)  # 和「这道菜怎么做」共用每天全站 AI 次数
+            if reason:
+                error = reason.replace('，先用稳厨经验库', '')
+            else:
+                call_id = dish_store.log_call(conn, visitor)
+                try:
+                    guess = dish_vision.parse_guess(dish_vision.call_vision(b64, mime))
+                    dish_store.mark_ok(conn, call_id)
+                except dish_ai.AIError as e:
+                    error = str(e)
+            if guess:  # 认出的菜正好是站内菜谱：「对，就是它」直接去菜谱
+                key = dish_store.resolve_alias(conn, guess['dish_name'])
+                row = next((r for r in conn.execute('SELECT id, name FROM recipes') if dish_match.normalize(r['name']) == key), None)
+                if row:
+                    site_id, guess['dish_name'] = row['id'], row['name']
+        finally:
+            conn.close()
+        b64 = None
+    status = 200 if guess else 422
+    return render_template('dish_photo.html', guess=guess, error=error, site_id=site_id,
+                           level=dish_vision.confidence_label(guess['confidence']) if guess else ''), status
 SHOP_SOURCES = {'detail': '详情页·缺的锅', 'tool': '详情页·小工具', 'list': '采购清单', 'starter': '入门备厨'}
 @app.route('/go')  # 购买按钮先经过这里：记一次点击，再跳去平台页面
 def go_buy():
@@ -854,6 +970,15 @@ def shop_stats():
     return render_template('stats.html', catalog=catalog, total=total, by_platform=by_platform, by_source=by_source,
                            top_items=top_items, top_recipes=top_recipes, views=views, detail_clicks=detail_clicks,
                            rate=rate, recent=recent, sources=SHOP_SOURCES)
+# 添加到主屏幕（PWA）：manifest 和苹果图标放在根路径，浏览器默认会来这里找；不做离线缓存、不推送
+@app.route('/manifest.webmanifest')
+def manifest():
+    return send_from_directory(os.path.join(BASE_DIR, 'static'), 'manifest.webmanifest',
+                               mimetype='application/manifest+json', max_age=3600)
+@app.route('/apple-touch-icon.png')
+@app.route('/apple-touch-icon-precomposed.png')
+def apple_touch_icon():
+    return send_from_directory(os.path.join(BASE_DIR, 'static', 'icons'), 'apple-touch-icon.png', max_age=86400)
 # 出错时给中文页面，不要让评委看到英文报错
 @app.errorhandler(404)
 def not_found(e):

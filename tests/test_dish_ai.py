@@ -206,8 +206,9 @@ try:
     print('6. 页面')
     c = wenchu.app.test_client()
     h = c.get('/dish-ai').get_data(as_text=True)
-    check('AI 拆菜页能打开，有菜名输入框', 'name="dish"' in h and 'AI 拆菜' in h)
-    check('导航里有 AI 拆菜', 'href="/dish-ai"' in c.get('/recipes').get_data(as_text=True))
+    check('「这道菜怎么做」页能打开，有菜名输入框，页面不再叫「AI 拆菜」', 'name="dish"' in h and '这道菜怎么做' in h and '拆菜' not in h)
+    nav = c.get('/recipes').get_data(as_text=True)
+    check('导航按用户意图：问怎么做 / 逛菜谱 / 我的厨房 / 分享我的菜谱', all(w in nav for w in ['问怎么做', '逛菜谱', '我的厨房', '分享我的菜谱']) and 'AI 拆菜' not in nav)
     r = c.post('/dish-ai', data={'dish': ''}, follow_redirects=True)
     check('没写菜名会提示', '请先写上菜名' in r.get_data(as_text=True))
     orig = dish_ai.call_deepseek
@@ -294,7 +295,7 @@ try:
               and r0['mode'] == 'AI+规则' and r0['model'] == 'deepseek-v4-flash')
         check('记录：用量都存了', (r0['prompt_tokens'], r0['completion_tokens'], r0['cache_hit_tokens'], r0['cache_miss_tokens'], r0['total_tokens']) == (420, 180, 384, 36, 600))
         stored = json.loads(r0['result_json'])
-        check('记录：存的是清洗后的 JSON（AI 初稿，结构固定）', set(stored) == {'canonical_name', 'main', 'side', 'season', 'methods', 'cookware', 'tips'}
+        check('记录：存的是清洗后的 JSON（AI 初稿，结构固定）', set(stored) == {'canonical_name', 'main', 'side', 'season', 'methods', 'cookware', 'tips', 'steps'}
               and stored['methods'] == ['炒'])
         check('记录有创建和更新时间', bool(r0['created_at']) and bool(r0['updated_at']))
         h = post('宫保鸡丁', '1.1.1.1')
@@ -320,7 +321,7 @@ try:
             post(f'测试菜{i}', '2.2.2.2')
         check('每个 IP 每天 5 次以内都真调 AI', len(calls) == before + 5)
         h = post('测试菜99', '2.2.2.2')
-        check('第 6 次：不调 AI，规则兜底并写明今天次数用完', len(calls) == before + 5 and '规则兜底' in h and '今天的 5 次 AI 拆菜已用完' in h)
+        check('第 6 次：不调 AI，规则兜底并写明今天次数用完', len(calls) == before + 5 and '规则兜底' in h and '今天的 5 次 AI 已用完' in h)
         h = post('宫保鸡丁', '2.2.2.2')
         check('次数用完的人，拆过的菜照样能用（缓存不占次数）', 'AI+规则' in h and '没再调 AI' in h and len(calls) == before + 5)
         post('测试菜100', '3.3.3.3, 10.0.0.1')
@@ -455,13 +456,32 @@ try:
         h = post('川味宫保鸡块', '8.3.3.3')
         con = db()
         n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
-        alias = con.execute("SELECT canonical_key, source FROM dish_aliases WHERE alias_key = '川味宫保鸡块'").fetchone()
+        alias = con.execute("SELECT canonical_key, source, status FROM dish_aliases WHERE alias_key = '川味宫保鸡块'").fetchone()
         con.close()
         check('AI 说新叫法的标准名是宫保鸡丁：调了 1 次 AI，但不新存记录', len(calls) == 1 and n_rec == 1)
-        check('新叫法记成别名，指向宫保鸡丁（来源 ai）', alias is not None and tuple(alias) == ('宫保鸡丁', 'ai'))
-        check('页面说明「稳厨已经拆过，直接用那一份」', '稳厨已经拆过' in h and '宫保鸡丁' in h)
+        check('新叫法记成别名，指向宫保鸡丁（来源 ai，待审核）', alias is not None and tuple(alias) == ('宫保鸡丁', 'ai', 'pending'))
+        check('页面说明「稳厨之前问过，直接用那一份」、叫法待审核', '稳厨之前问过' in h and '宫保鸡丁' in h and '审核' in h)
+        check('待审核的别名不进联想、不用来对齐', '川味宫保鸡块' not in dish_store.alias_map(db())
+              and dish_store.resolve_alias(db(), '川味宫保鸡块') == '川味宫保鸡块'
+              and all(it['name'] != '川味宫保鸡块' for it in c.get('/dish-ai/suggest?q=川味宫保鸡块').get_json()['items']))
         post('川味宫保鸡块', '8.3.3.3')
-        check('同一新叫法再来：靠别名直接命中，不再调 AI', len(calls) == 1)
+        con = db()
+        n_rec2 = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        con.close()
+        check('审核前同一新叫法再来：会再问一次 AI，但照样去重、不新存', len(calls) == 2 and n_rec2 == n_rec)
+        con = db()
+        check('待审核列表里有它；审核通过后变成生效', ('川味宫保鸡块', '宫保鸡丁') in [p[:2] for p in dish_store.pending_aliases(con)]
+              and dish_store.review_alias(con, '川味宫保鸡块', approve=True))
+        con.close()
+        post('川味宫保鸡块', '8.3.3.3')
+        check('审核通过后：靠别名直接命中，不再调 AI', len(calls) == 2)
+        con = db()
+        dish_store.add_alias(con, '宫保鸡块块', '宫保鸡丁', 'ai')
+        con.commit()
+        check('审核不通过：直接删掉', dish_store.review_alias(con, '宫保鸡块块', approve=False)
+              and con.execute("SELECT COUNT(*) FROM dish_aliases WHERE alias_key = '宫保鸡块块'").fetchone()[0] == 0)
+        check('种子别名默认生效', con.execute("SELECT COUNT(*) FROM dish_aliases WHERE source = 'seed' AND status != 'active'").fetchone()[0] == 0)
+        con.close()
 
         dish_ai.call_deepseek = fake_canon('地三鲜')
         calls.clear()
@@ -469,8 +489,9 @@ try:
         con = db()
         rec = con.execute("SELECT canonical_name FROM dish_breakdowns WHERE canonical_key = '地三鲜'").fetchone()
         con.close()
-        check('全新的菜：按 AI 给的标准名「地三鲜」存一条，用户的叫法记成别名', rec is not None and rec[0] == '地三鲜'
-              and dish_store.resolve_alias(db(), '东北地三鲜') == '地三鲜')
+        check('全新的菜：按 AI 给的标准名「地三鲜」存一条，用户的叫法记成待审核别名', rec is not None and rec[0] == '地三鲜'
+              and ('东北地三鲜', '地三鲜') in [p[:2] for p in dish_store.pending_aliases(db())]
+              and dish_store.resolve_alias(db(), '东北地三鲜') == '东北地三鲜')
         post('地三鲜', '8.4.4.4')
         check('之后直接打标准名也命中，不调 AI', len(calls) == 1)
         dish_ai.call_deepseek = fake_canon('蛋炒饭')
@@ -478,7 +499,10 @@ try:
         con = db()
         n_site = con.execute("SELECT COUNT(*) FROM dish_breakdowns WHERE canonical_key = '蛋炒饭'").fetchone()[0]
         con.close()
-        check('AI 认出是站内菜：不另存记录，叫法记成别名，下次直接用菜谱', n_site == 0
+        con = db()
+        approved = dish_store.review_alias(con, '黄金炒饭')
+        con.close()
+        check('AI 认出是站内菜：不另存记录，叫法待审核；审核后直接用菜谱', n_site == 0 and approved
               and dish_store.resolve_alias(db(), '黄金炒饭') == '蛋炒饭' and '稳厨菜谱里的「蛋炒饭」' in h)
 
         dish_ai.call_deepseek = fake_canon('宫保鸡丁')
@@ -492,7 +516,7 @@ try:
         con.close()
         check('个性化条件（没有炒锅）：不复用记录，带着说明单独调 AI', len(calls) == 1 and '没有炒锅' in calls[0][1])
         check('个性化结果不存进菜谱库', n_after == n_before)
-        check('页面说明按条件单独拆、不存', '单独请 AI 拆了一次' in h and '不存进菜谱库' in h)
+        check('页面说明按条件单独拆、不存', '单独请 AI 查了一次' in h and '不存进菜谱库' in h)
         h = post('蛋炒饭', '8.5.5.5', desc='想用空气炸锅')
         check('站内菜 + 个性化条件：也不套菜谱，单独调 AI', len(calls) == 2 and '稳厨菜谱：站内' not in h)
         calls.clear()
@@ -533,7 +557,8 @@ try:
 
     print('10. 页面：只有一个输入框')
     h = c.get('/dish-ai').get_data(as_text=True)
-    check('只有一个菜名输入框，带联想', h.count('name="dish"') == 1 and 'id="dish-suggest"' in h and '/dish-ai/suggest' in h)
+    check('只有一个菜名输入框，带联想', h.count('name="dish"') == 1 and 'id="dish-suggest"' in h and '/static/ask.js' in h
+          and '/dish-ai/suggest' in open(os.path.join(ROOT, 'static', 'ask.js'), encoding='utf-8').read())
     check('没有单独的「选稳厨已验证的菜」入口', '选稳厨已验证' not in h)
     check('不开 JS 也能提交：普通表单 POST', 'method="post" action="/dish-ai"' in h)
     h = post('宫保鸡块饭', '8.6.6.6', rules_only='1')

@@ -2,105 +2,60 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
-<title>稳厨 - 有什么锅，就做什么菜</title>
+<title>稳厨 - 今天想做什么菜？</title>
 </head>
 <body class="home">
 {% include '_nav.html' %}
-<section class="home-hero">
-  <div class="hero-text">
+<main class="ask-home">
+  <section class="ask-hero">
     <span class="eyebrow">🌿 给厨房小白的放心菜谱</span>
-    <h1>有什么锅，<br>就做<em>什么菜</em></h1>
-    <p class="lead">欢迎来到稳厨：按你家里的锅具，找到能稳稳做成的菜。每一步都写清楚做什么、用什么工具、要注意什么。</p>
-    <div class="hero-actions">
-      <button class="hero-btn" onclick="showRecommend()">进入稳厨 →</button>
-      <a class="btn btn-lg btn-ghost" href="/profile?edit=1">先填我家的锅</a>
+    <h1>今天想做什么菜？</h1>
+    <p class="lead">说个菜名或拍张照，稳厨告诉你买什么、用什么锅、你家还缺什么、一步步怎么做。</p>
+    {% include '_flash.html' %}
+    {% include '_ask_box.html' %}
+    <nav class="quick-chips" aria-label="快捷入口">
+      {% for ico, label, url in chips %}<a class="chip{% if loop.first %} green{% endif %}" href="{{ url }}">{{ ico }} {{ label }}</a>{% endfor %}
+    </nav>
+  </section>
+
+  <section class="picks">
+    <div class="sec-head">
+      <h2>今日推荐{% if by_pots %} · 按你家的锅{% endif %}</h2>
+      <a href="{{ '/recommend' if by_pots else '/recipes' }}">全部 →</a>
     </div>
-    <div class="hero-points"><span>按锅推荐</span><span>步骤带安全提示</span><span>缺锅一键备齐</span></div>
-  </div>
-  <div class="hero-visual">
-    <div class="mosaic">
-      <img src="/static/dishes/recipe-01.webp" alt="可乐鸡翅">
-      <img src="/static/dishes/recipe-12.webp" alt="蛋炒饭">
-      <img src="/static/dishes/recipe-05.webp" alt="熔岩吐司">
-    </div>
-    <div class="float-card"><span class="dot">🍳</span><span><b>只有一口炒锅？</b>也能做好几道菜</span></div>
-    <p class="ai-note">菜品图由 AI（即梦）生成，仅作示意</p>
-  </div>
-</section>
-<section class="features">
-  <a class="feature" href="/recommend"><span class="ico">🍳</span><h3>按锅找菜</h3><p>告诉稳厨家里有什么锅，直接告诉你今天能做哪些菜。</p><span class="more">看为我推荐 →</span></a>
-  <a class="feature" href="/recipes"><span class="ico">📋</span><h3>一步步带着做</h3><p>每道菜都写明时间、食材、厨具和每一步的安全提醒。</p><span class="more">逛放心菜谱 →</span></a>
-  <a class="feature" href="/starter"><span class="ico">🧺</span><h3>缺锅缺菜一键备齐</h3><p>算出先补哪件锅最划算，食材自动生成采购清单。</p><span class="more">去入门备厨 →</span></a>
-</section>
-<p class="home-foot">购买按钮为潜在合作示意，未签约，暂不下单；只跳到平台公开搜索页，价格为示例 · 菜品图由 AI 生成</p>
-<div id="recommend-popup" style="display:none;">
-  <div class="popup-box">
-    <h2>今日推荐</h2>
-    <div id="recommend-list"></div>
-    <button onclick="closePopup()">进入稳厨</button>
-  </div>
-</div>
+    {% if not by_pots %}<p class="hint picks-hint">还没填家里的锅，先推大家常做的放心菜。<a href="/profile?edit=1">填一下锅具</a>，就只推你能做的。</p>{% endif %}
+    {% if picks %}
+    <ul class="swipe-row">
+      {% for r in picks %}
+      <li class="pick">
+        <a href="/recipe/{{ r.id }}">
+          {% if r.image %}<img src="{{ r.image }}" alt="{{ r.name }}" loading="lazy">{% else %}<span class="pick-empty">🍽️</span>{% endif %}
+          <strong>{{ r.name }}</strong>
+          <span class="meta">{% if r.time_minutes %}⏱ 约 {{ r.time_minutes }} 分钟{% endif %}{% if r.rate is not none %} · 👍 {{ r.rate }}%{% endif %}</span>
+        </a>
+        <span class="pick-vote">
+          <button type="button" data-vote="like" data-id="{{ r.id }}" aria-label="好吃">👍</button>
+          <button type="button" data-vote="dislike" data-id="{{ r.id }}" aria-label="不好吃">👎</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">你家现在的锅还做不了稳厨里的菜，<a href="/starter">看看先买哪口锅最划算</a>。</p>
+    {% endif %}
+  </section>
+
+  <section class="intent-cards">
+    <a class="intent" href="/recipes"><b>📖 逛菜谱</b><span>稳厨验证过的放心菜，按分类、时间、预算挑。</span></a>
+    <a class="intent" href="/upload"><b>✍️ 分享我的菜谱</b><span>拍张成品照，分享你的拿手菜。</span></a>
+    <a class="intent" href="/questions"><b>💬 大家的疑问</b><span>觉得哪一步不对？在菜谱页提出来，大家站队。</span></a>
+  </section>
+  <p class="home-foot">购买按钮为潜在合作示意，未签约，暂不下单；只跳到平台公开搜索页，价格为示例 · 菜品图由 AI 生成</p>
+</main>
+{% include '_footer.html' %}
 <script src="/static/vote.js"></script>
 <script>
-function showRecommend() {
-  // 每次都向服务器要最新推荐：改过画像后马上能看到新结果
-  fetch('/daily_recommend')
-    .then(r => r.json())
-    .then(renderRecommend)
-    .catch(() => renderRecommend({recipes: [], need_profile: false, error: true}));
-  document.getElementById('recommend-popup').style.display = 'flex';
-}
-// 菜名一律用 textContent 当普通文字放进去，不拼进 HTML，防止菜名里的脚本被执行
-function renderRecommend(data) {
-  const list = document.getElementById('recommend-list');
-  list.textContent = '';
-  if (!data.recipes || data.recipes.length === 0) {
-    const p = document.createElement('p');
-    if (data.need_profile) {
-      p.appendChild(document.createTextNode('还没填过家里有的锅具，'));
-      const a = document.createElement('a');
-      a.href = '/profile';
-      a.style.fontWeight = '700';
-      a.textContent = '先去填一下';
-      p.appendChild(a);
-      p.appendChild(document.createTextNode('，稳厨每天给你推能做的菜。'));
-    } else if (data.error) {
-      p.textContent = '推荐暂时没取到，先去看看全部菜谱吧。';
-    } else {
-      p.textContent = '今天没有符合你锅具的菜';
-    }
-    list.appendChild(p);
-    return;
-  }
-  data.recipes.forEach(r => {
-    const p = document.createElement('p');
-    p.className = 'rec-item';
-    if (r.image && r.image.startsWith('/')) {  // 有菜品图就配一张小图
-      const img = document.createElement('img');
-      img.src = r.image;
-      img.alt = r.name;
-      img.className = 'rec-thumb';
-      p.appendChild(img);
-    }
-    const a = document.createElement('a');
-    a.href = '/recipe/' + encodeURIComponent(r.id);
-    a.textContent = r.name;
-    const like = document.createElement('button');
-    like.type = 'button';
-    like.textContent = '👍';
-    like.addEventListener('click', () => vote(r.id, 'like'));
-    const dislike = document.createElement('button');
-    dislike.type = 'button';
-    dislike.textContent = '👎';
-    dislike.addEventListener('click', () => vote(r.id, 'dislike'));
-    p.append(a, ' ', like, ' ', dislike);
-    list.appendChild(p);
-  });
-}
-function closePopup() {
-  document.getElementById('recommend-popup').style.display = 'none';
-  window.location.href = '/recipes';
-}
+document.querySelectorAll('[data-vote]').forEach(b => b.addEventListener('click', () => vote(Number(b.dataset.id), b.dataset.vote)));
 </script>
 </body>
 </html>

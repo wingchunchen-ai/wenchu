@@ -1,5 +1,19 @@
 {# 上传和编辑共用的菜谱表单：和现成菜谱同一套信息 #}
 <form action="{{ action }}" method="post" enctype="multipart/form-data" id="recipe-form">
+  <div class="photo-first">
+    <img id="image-preview" class="photo-preview" alt="成品照预览" {% if recipe and recipe['image'] %}src="{{ recipe['image'] }}"{% else %}hidden{% endif %}>
+    {% if not (recipe and recipe['image']) %}<div class="photo-empty" id="photo-empty"><span>📷</span>先放一张成品照，菜名、步骤后面慢慢填</div>{% endif %}
+    <div class="photo-btns">
+      <label class="btn btn-primary" for="image-camera">📷 拍成品照</label>
+      <label class="btn btn-ghost" for="image-album">🖼 从相册选</label>
+    </div>
+    <input type="file" name="image" id="image-camera" accept="image/*" capture="environment" class="vh photo-input">
+    <input type="file" name="image" id="image-album" accept="image/*" class="vh photo-input">
+    <noscript><p class="hint">（没开 JS：点上面按钮选好照片后，照常填完点下面的提交。）</p></noscript>
+    <label class="consent"><input type="checkbox" name="photo_consent" value="1" {% if form.get('photo_consent') == '1' %}checked{% endif %}>
+      我同意把这张照片作为菜谱图公开展示（照片是我自己拍的）。不勾也能发，只是不放照片。</label>
+    <p class="hint">支持 JPG、PNG、WebP、GIF，最大 5MB；保存前会去掉照片里的拍摄地点等信息。照片不会发给 AI。{% if recipe and recipe['image'] %}不选新照片就保留现在的图。{% endif %}</p>
+  </div>
   <p>菜名（必填）：<input type="text" name="name" required maxlength="40" value="{{ form.get('name', '') }}"></p>
   <p>简介：<input type="text" name="description" placeholder="一句话说说这道菜怎么做" value="{{ form.get('description', '') }}"></p>
   <p>分类（必填）：
@@ -32,11 +46,6 @@
   </div>
   <p><button type="button" id="add-step">+ 增加一步</button></p>
 
-  <p>菜品图片{% if recipe and recipe['image'] %}（不选就保留现在的图）{% endif %}：<input type="file" name="image" id="image-input" accept=".jpg,.jpeg,.png,.webp,.gif"></p>
-  <p class="hint">支持 jpg、png、webp、gif，最大 5MB。</p>
-  <img id="image-preview" alt="" style="display:none; width:100%; max-width:300px; border-radius:8px;">
-  {% if recipe and recipe['image'] %}<p>现在的图：<br><img src="{{ recipe['image'] }}" style="width:100%; max-width:200px; border-radius:8px;"></p>{% endif %}
-
   <p><button type="button" id="preview-btn">先预览一下</button> <input type="submit" value="{{ submit_text }}"></p>
 </form>
 <div id="preview" class="preview" style="display:none;"></div>
@@ -59,15 +68,44 @@
     e.target.closest('.step').remove();
     renumber();
   });
-  // 选图后先在页面上看一眼
-  document.getElementById('image-input').addEventListener('change', (e) => {
+  // 选图后先在页面上看一眼；能缩就先在手机上缩到最长边 1600（也顺便去掉 EXIF），不能缩就原样交给服务器
+  function shrink(file, maxSide) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => b ? resolve(b) : reject(new Error('toBlob')), 'image/jpeg', 0.88);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  document.querySelectorAll('.photo-input').forEach(inp => inp.addEventListener('change', async () => {
     const img = document.getElementById('image-preview');
-    const file = e.target.files[0];
-    if (!file) { img.style.display = 'none'; return; }
-    if (file.size > 5 * 1024 * 1024) { alert('图片超过 5MB，请换一张小一点的'); e.target.value = ''; img.style.display = 'none'; return; }
-    img.src = URL.createObjectURL(file);
-    img.style.display = 'block';
-  });
+    const empty = document.getElementById('photo-empty');
+    const file = inp.files[0];
+    if (!file) return;
+    document.querySelectorAll('.photo-input').forEach(o => { if (o !== inp) o.value = ''; });
+    let out = file;
+    if (file.type !== 'image/gif') {
+      try {
+        const blob = await shrink(file, 1600);
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'photo.jpg', {type: 'image/jpeg'}));
+        inp.files = dt.files;
+        out = blob;
+      } catch (e) { /* 解不开就原样上传 */ }
+    }
+    if (out.size > 5 * 1024 * 1024) { alert('图片超过 5MB，请换一张小一点的'); inp.value = ''; return; }
+    img.src = URL.createObjectURL(out);
+    img.hidden = false;
+    if (empty) empty.hidden = true;
+  }));
   // 预览：按详情页的样子把填的内容排出来（全部用 textContent，填什么显示什么）
   document.getElementById('preview-btn').addEventListener('click', () => {
     const f = document.getElementById('recipe-form');
