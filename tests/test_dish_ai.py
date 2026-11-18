@@ -72,7 +72,7 @@ try:
     conn.close()
 
     print('1. 规则库：做法 → 锅具')
-    cases = {'爆炒': '炒锅', '清蒸': '蒸锅', '油炸': '油温计', '炖煲': '电饭煲', '烤': '空气炸锅', '煎': '平底锅', '水煮': '小汤锅'}
+    cases = {'炒': '炒锅', '清蒸': '蒸锅', '油炸': '油温计', '炖煲': '电饭煲', '烤': '空气炸锅', '煎': '平底锅', '水煮': '小汤锅'}
     for m, pot in cases.items():
         cw, _ = dish_rules.build_cookware([m])
         check(f'{m} 一定要 {pot}', pot in names(cw), names(cw))
@@ -92,8 +92,8 @@ try:
 
     print('2. JSON 校验 / 清洗')
     d = dish_ai.parse_ai_json(GOOD)
-    check('合格 JSON 能解析', d['main'] == ['鸡胸肉', '花生米'] and d['methods'] == ['爆炒'])
-    check('包在 ``` 代码块里也能解析', dish_ai.parse_ai_json('```json\n' + GOOD + '\n```')['methods'] == ['爆炒'])
+    check('合格 JSON 能解析', d['main'] == ['鸡胸肉', '花生米'] and d['methods'] == ['炒'])
+    check('包在 ``` 代码块里也能解析', dish_ai.parse_ai_json('```json\n' + GOOD + '\n```')['methods'] == ['炒'])
     for bad, why in [('不是JSON', '不是 JSON'), ('[1,2]', '不是对象'), ('', '空'),
                      ('{"recognized": false}', '不认得'), ('{"main": ["鸡"], "methods": []}', '没做法'),
                      ('{"main": [], "methods": ["爆炒"]}', '没主料'), ('{"main": ["鸡"], "methods": ["量子烹饪"]}', '做法不在规则库')]:
@@ -107,7 +107,7 @@ try:
                                           'tips': '<b>小心</b>'}, ensure_ascii=False))
     check('清洗：去掉尖括号、非字符串、括号说明，限制长度',
           all('<' not in x and len(x) <= dish_ai.MAX_NAME for x in d['main']) and '鸡' in d['main'] and 123 not in d['main'], d['main'])
-    check('清洗：做法归一并去重', d['methods'] == ['爆炒'], d['methods'])
+    check('清洗：做法归一并去重（大火爆炒、爆炒 → 炒）', d['methods'] == ['炒'], d['methods'])
     check('清洗：锅具可以是字符串，非法项丢掉', [c['name'] for c in d['cookware']] == ['平底锅'])
     check('清洗：提醒里没有尖括号', '<' not in d['tips'])
     many = json.dumps({'main': [f'料{i}' for i in range(50)], 'methods': ['煎']}, ensure_ascii=False)
@@ -131,19 +131,41 @@ try:
     print('4. 规则兜底')
     r = dish_ai.analyze('宫保鸡丁', '', [], False, known, catalog, caller=fake_fail)
     check('AI 失败 → 规则兜底，并说明原因', r['mode'] == '规则兜底' and '超时' in r['ai_error'])
-    check('兜底用经验库的宫保鸡丁：主料鸡胸肉、做法爆炒、要炒锅',
-          r['main'] == ['鸡胸肉'] and r['methods'] == ['爆炒'] and '炒锅' in names(r['cookware']))
+    check('兜底用经验库的宫保鸡丁：主料鸡胸肉、做法炒、要炒锅',
+          r['main'] == ['鸡胸肉'] and r['methods'] == ['炒'] and '炒锅' in names(r['cookware']))
     r = dish_ai.analyze('宫保鸡丁', '', [], False, known, catalog, caller=fake_ok('乱七八糟'))
     check('AI 返回坏 JSON → 规则兜底', r['mode'] == '规则兜底' and r['main'] == ['鸡胸肉'])
     r = dish_ai.analyze('宫保鸡丁', '', [], False, known, catalog)  # 环境里没有密钥
     check('没配密钥 → 规则兜底，提示没配置', r['mode'] == '规则兜底' and '没配置' in r['ai_error'])
-    r = dish_ai.analyze('可乐鸡翅', '', ['炒锅'], True, known, catalog, use_ai=False)
-    check('站内菜：锅具跟菜谱一致（平底锅、小汤锅）', {'平底锅', '小汤锅'} <= set(names(r['cookware'])) and '炒锅' not in names(r['cookware']))
+    print('4b. 站内 12 道菜：做法看菜名和步骤，锅具、花费跟原菜谱一模一样')
+    expect_methods = {'可乐鸡翅': ['水煮', '煎', '炖煲'], '芥末虾球': ['油炸'], '巧克力慕斯蛋糕': ['打发'], '干锅花菜': ['炒'],
+                      '熔岩吐司': ['烤'], '生啫鱿鱼': ['红烧', '炒'], '秘制土豆鸡腿饭': ['炖煲', '煎'],
+                      '龙虾面': ['炒', '炖煲', '水煮'], '赛螃蟹': ['炒'], '爆炒猪肝': ['炒'], '奶油蘑菇意面': ['水煮', '炒'], '蛋炒饭': ['炒']}
     con = wenchu.get_db()
-    rec = con.execute("SELECT * FROM recipes WHERE name='可乐鸡翅'").fetchone()
-    steps = con.execute('SELECT tools FROM recipe_steps WHERE recipe_id=?', (rec['id'],)).fetchall()
+    bad_methods, bad_cost, bad_tools = [], [], []
+    for owned in ([], ['炒锅'], ['平底锅', '小汤锅']):
+        for rec in con.execute('SELECT * FROM recipes WHERE is_official = 1 ORDER BY id').fetchall():
+            steps = con.execute('SELECT tools FROM recipe_steps WHERE recipe_id=?', (rec['id'],)).fetchall()
+            r = dish_ai.analyze(rec['name'], '', owned, bool(owned), known, catalog, caller=fake_ok(GOOD))
+            orig = shop.meal_cost(rec, steps, owned, catalog, know_pots=bool(owned))
+            if r['methods'] != expect_methods[rec['name']]:
+                bad_methods.append((rec['name'], r['methods']))
+            if r['cost'] != orig or r['missing'] != (orig['missing_pots'] if owned else r['missing']):
+                bad_cost.append((rec['name'], owned, r['cost']['total'], orig['total']))
+            need = set(shop.pots_needed(shop.recipe_tools_text(rec, steps)))
+            if {c['name'] for c in r['cookware'] if c['is_pot']} != need or r['mode'] != '稳厨菜谱':
+                bad_tools.append(rec['name'])
     con.close()
-    check('站内菜：花费和列表页「补齐约」一样', r['cost']['total'] == shop.meal_cost(rec, steps, ['炒锅'], catalog)['total'])
+    check('12 道菜的做法都对得上菜名和步骤（蛋炒饭是炒，不是煎）', not bad_methods, bad_methods)
+    check('12 道菜 × 3 种厨房：补齐花费和缺的锅跟列表页完全一样', not bad_cost, bad_cost)
+    check('12 道菜的锅跟原菜谱一样，不多不少；不调 AI，标「稳厨菜谱」', not bad_tools, bad_tools)
+    r = dish_ai.analyze('蛋炒饭', '', ['炒锅'], True, known, catalog, use_ai=False)
+    check('蛋炒饭：做法炒，用平底锅，不会多出炒锅', r['methods'] == ['炒'] and '平底锅' in names(r['cookware']) and '炒锅' not in names(r['cookware']))
+    check('蛋炒饭：锅具原因里不再出现「煎」', '煎' not in ''.join(c['reason'] for c in r['cookware']))
+    r = dish_ai.analyze('可乐鸡翅', '', [], False, known, catalog, use_ai=False)
+    check('站内菜：「腌制」「拌饭」「搅拌」不会被当成凉拌', all('凉拌' not in dish_ai.analyze(n, '', [], False, known, catalog, use_ai=False)['methods'] for n in expect_methods))
+    check('站内菜：调味料和「可选」算家里已有', '料酒' in r['season'] and '鸡翅' in r['main'])
+    check('站内菜：页面给出完整菜谱链接', r['site_id'] == 1)
     r = dish_ai.analyze('红烧茄子', '', [], False, known, catalog, use_ai=False)
     check('没收录的菜：按菜名猜出茄子 + 红烧 → 炒锅、锅盖', r['main'] == ['茄子'] and {'炒锅', '锅盖'} <= set(names(r['cookware'])))
     r = dish_ai.analyze('神秘料理', '', [], False, known, catalog, use_ai=False)
@@ -196,6 +218,8 @@ try:
         check('页面写明示例价和合作声明', '示例价' in h and catalog['disclaimer'] in h)
         h = c.post('/dish-ai', data={'dish': '宫保鸡丁', 'rules_only': '1'}).get_data(as_text=True)
         check('勾「只用经验库」：不调 AI，写明规则兜底', '规则兜底' in h and 'AI 提出' not in h)
+        h = c.post('/dish-ai', data={'dish': '蛋炒饭', 'rules_only': '1'}).get_data(as_text=True)
+        check('蛋炒饭页面：标「稳厨菜谱」、做法显示炒、有菜谱链接', '稳厨菜谱' in h and '<span class="chip red">炒</span>' in h and 'href="/recipe/12"' in h)
     finally:
         dish_ai.call_deepseek = orig
     dish_ai.call_deepseek = fake_fail

@@ -138,13 +138,21 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
     dish = _clean_name(dish)
     description = (description or '').strip()[:100]
     ai, ai_error = None, '' if use_ai else '已选只用稳厨经验库'
+    rules = dish_rules.rule_draft(dish, description, known_recipes)
+    if rules['site_id']:  # 站内已有这道菜：直接用菜谱里的食材、做法、锅具，花费跟列表页一致，不调 AI
+        use_ai = False
     if use_ai:
         try:
             ai = parse_ai_json((caller or call_deepseek)(dish, description))
         except AIError as e:
             ai_error = str(e)
-    rules = dish_rules.rule_draft(dish, description, known_recipes)
-    if ai:
+    if rules['site_id']:
+        mode = '稳厨菜谱'
+        main, side, season = rules['main'], rules['side'], rules['season']
+        methods = rules['methods']
+        cookware, dropped = dish_rules.build_site_cookware(methods, rules['site_tools']), []
+        tips = ''
+    elif ai:
         mode = 'AI+规则'
         main, side, season = ai['main'], ai['side'], ai['season']
         # 做法：AI 的为主，菜名里明写的做法规则也要算上（例如名字带「清蒸」AI 却漏了）
@@ -169,11 +177,13 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
     # 花费沿用全站的 meal_cost：食材按采购清单算（调味料不算），锅只算画像里还缺的
     buy = main + side
     recipe = {'ingredients_list': '、'.join(buy), 'tools_list': '、'.join(pot_names)}
+    if rules['site_id']:  # 站内菜：花费直接按原菜谱的食材清单算，跟列表页「补齐约」一模一样
+        recipe['ingredients_list'] = rules['ingredients_list']
     cost = shop.meal_cost(recipe, [], owned, catalog, know_pots=know_pots) if buy or pot_names else None
     rows = shop.shopping_list(recipe['ingredients_list'], catalog) if buy else []
     return {
         'dish': dish, 'description': description, 'mode': mode, 'ai_error': ai_error,
-        'matched': rules['matched'], 'main': main, 'side': side, 'season': season, 'methods': methods,
+        'matched': rules['matched'], 'site_id': rules['site_id'], 'main': main, 'side': side, 'season': season, 'methods': methods,
         'cookware': cookware, 'dropped': [d for d in dropped if d], 'tips': tips,
         'have': [p for p in pot_names if p in owned], 'missing': [p for p in pot_names if p not in owned],
         'know_pots': know_pots, 'cost': cost, 'rows': rows,

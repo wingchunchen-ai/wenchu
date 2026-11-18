@@ -34,16 +34,18 @@
       <h2>「{{ result.dish }}」拆解结果</h2>
       {% if result.mode == 'AI+规则' %}
       <span class="mode-tag ai">✨ AI+规则：AI 出初稿，稳厨经验库核对锅具</span>
+      {% elif result.mode == '稳厨菜谱' %}
+      <span class="mode-tag ai">📖 稳厨菜谱：站内已有这道菜，食材、锅具按菜谱来</span>
       {% else %}
       <span class="mode-tag rule">🧭 规则兜底：这次没用 AI{% if result.ai_error %}（{{ result.ai_error }}）{% endif %}，只靠稳厨经验库</span>
       {% endif %}
     </div>
-    {% if result.matched %}<p class="meta">参考了：{{ result.matched }}</p>{% endif %}
+    {% if result.matched %}<p class="meta">参考了：{{ result.matched }}{% if result.site_id %} · <a href="/recipe/{{ result.site_id }}">看完整菜谱和步骤 →</a>{% endif %}</p>{% endif %}
 
     {% if result.empty %}
     <div class="empty-state">
       <p>稳厨经验库暂时没认出这道菜的食材和做法。</p>
-      <p class="hint">可以在「补充说明」里写上做法（比如：红烧、清蒸、爆炒），或者打开 AI 再试一次。</p>
+      <p class="hint">可以在「补充说明」里写上做法（比如：红烧、清蒸、炒），或者打开 AI 再试一次。</p>
     </div>
     {% else %}
     <div class="ai-grid">

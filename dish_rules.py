@@ -10,11 +10,11 @@ import shop
 METHODS = [
     ('油炸', ['油炸', '炸', '酥炸', '干炸', '软炸', '过油']),
     ('清蒸', ['清蒸', '蒸', '隔水']),
-    ('炖煲', ['炖', '煲', '煨', '卤', '焖煮', '慢炖']),
+    ('炖煲', ['炖', '煲', '煨', '卤', '焖煮', '慢炖', '熬']),
     ('红烧', ['红烧', '焖', '烧', '烩', '收汁']),
     ('烤', ['烤', '焗', '烘']),
     ('煎', ['煎', '铁板', '香煎']),
-    ('爆炒', ['爆炒', '炒', '煸', '干锅', '熘', '滑炒', '小炒', '爆']),
+    ('炒', ['爆炒', '炒', '煸', '干锅', '熘', '滑炒', '小炒', '爆香', '爆']),
     ('水煮', ['水煮', '煮', '焯', '汆', '涮', '汤', '面条', '白灼']),
     ('微波', ['微波', '叮']),
     ('焖饭', ['焖饭', '煮饭', '煲仔饭', '蒸饭']),
@@ -26,7 +26,7 @@ METHOD_NAMES = [m for m, _ in METHODS]
 # 每种做法要什么锅具、为什么。name 必须是全站用的名字；alt 是「家里有这个也行」的替代说法
 # 画像里没有的东西（油温计、漏勺、砂锅…）只列出来提醒，不在示例价里，花费不计
 RULES = {
-    '爆炒': [('炒锅', '大火快炒要锅深、受热快，翻炒时菜不容易溢出来', ''), ('锅铲', '翻炒、出锅都要用', '')],
+    '炒': [('炒锅', '大火快炒要锅深、受热快，翻炒时菜不容易溢出来', ''), ('锅铲', '翻炒、出锅都要用', '')],
     '清蒸': [('蒸锅', '隔水蒸要有蒸屉和锅盖，把蒸汽锁住才熟得均匀', '或炒锅里放蒸架')],
     '油炸': [('炒锅', '炸东西要锅深，油不容易溅出来；稳厨用深一点的炒锅当炸锅', '或深一点的小汤锅'),
              ('油温计', '看准油温再下锅，油太热容易起火、太凉会吸油', ''),
@@ -42,7 +42,7 @@ RULES = {
     '打发': [('打蛋器', '奶油、蛋清要打发到起泡变稠', '')],
 }
 # 画像六口锅 → 它对应的典型做法（站内菜谱按锅反推做法用）
-POT_METHOD = {'炒锅': '爆炒', '平底锅': '煎', '蒸锅': '清蒸', '空气炸锅': '烤', '电饭煲': '焖饭', '微波炉': '微波', '小汤锅': '水煮'}
+POT_METHOD = {'炒锅': '炒', '平底锅': '煎', '蒸锅': '清蒸', '空气炸锅': '烤', '电饭煲': '焖饭', '微波炉': '微波', '小汤锅': '水煮'}
 # 不管什么菜，切配都要这两样
 BASIC = [('刀', '切配食材', ''), ('案板', '切菜、切肉要垫着', '')]
 
@@ -99,7 +99,7 @@ def methods_from_text(text):
     for w in sorted({w for ws in ALIASES.values() for w in ws}, key=len, reverse=True):
         if len(w) >= 2:
             t = t.replace(w, ' ')
-    # 「清蒸」「油炸」这类关键字优先；「炒饭」算爆炒，不算焖饭
+    # 「清蒸」「油炸」这类关键字优先；「炒饭」算炒，不算焖饭
     for name, words in METHODS:
         if any(w in t for w in words) and name not in found:
             found.append(name)
@@ -113,17 +113,17 @@ def methods_from_text(text):
 # 常见菜兜底资料（稳厨经验库）：没接上 AI 时按菜名对上这里。只写食材和做法，不写价格
 COMMON_DISHES = {
     '宫保鸡丁': {'main': ['鸡胸肉'], 'side': ['花生米', '干辣椒', '葱', '姜', '蒜'],
-             'season': ['花椒', '生抽', '醋', '糖', '淀粉', '料酒'], 'methods': ['爆炒']},
+             'season': ['花椒', '生抽', '醋', '糖', '淀粉', '料酒'], 'methods': ['炒']},
     '清蒸鲈鱼': {'main': ['鲈鱼'], 'side': ['葱', '姜'], 'season': ['蒸鱼豉油', '料酒', '油'], 'methods': ['清蒸']},
-    '番茄炒蛋': {'main': ['番茄', '鸡蛋'], 'side': ['葱'], 'season': ['盐', '糖', '油'], 'methods': ['爆炒']},
-    '西红柿炒鸡蛋': {'main': ['番茄', '鸡蛋'], 'side': ['葱'], 'season': ['盐', '糖', '油'], 'methods': ['爆炒']},
+    '番茄炒蛋': {'main': ['番茄', '鸡蛋'], 'side': ['葱'], 'season': ['盐', '糖', '油'], 'methods': ['炒']},
+    '西红柿炒鸡蛋': {'main': ['番茄', '鸡蛋'], 'side': ['葱'], 'season': ['盐', '糖', '油'], 'methods': ['炒']},
     '红烧肉': {'main': ['五花肉'], 'side': ['葱', '姜'], 'season': ['冰糖', '生抽', '老抽', '料酒', '八角'], 'methods': ['红烧']},
-    '麻婆豆腐': {'main': ['豆腐'], 'side': ['牛肉末', '蒜', '葱'], 'season': ['豆瓣酱', '花椒', '淀粉', '生抽', '油'], 'methods': ['爆炒', '红烧']},
+    '麻婆豆腐': {'main': ['豆腐'], 'side': ['牛肉末', '蒜', '葱'], 'season': ['豆瓣酱', '花椒', '淀粉', '生抽', '油'], 'methods': ['炒', '红烧']},
     '鱼香肉丝': {'main': ['猪里脊'], 'side': ['木耳', '胡萝卜', '青椒', '葱', '姜', '蒜'],
-             'season': ['豆瓣酱', '醋', '糖', '生抽', '淀粉'], 'methods': ['爆炒']},
-    '回锅肉': {'main': ['五花肉'], 'side': ['青蒜', '青椒'], 'season': ['豆瓣酱', '甜面酱', '料酒'], 'methods': ['水煮', '爆炒']},
+             'season': ['豆瓣酱', '醋', '糖', '生抽', '淀粉'], 'methods': ['炒']},
+    '回锅肉': {'main': ['五花肉'], 'side': ['青蒜', '青椒'], 'season': ['豆瓣酱', '甜面酱', '料酒'], 'methods': ['水煮', '炒']},
     '糖醋排骨': {'main': ['排骨'], 'side': ['姜'], 'season': ['醋', '糖', '生抽', '料酒', '油'], 'methods': ['油炸', '红烧']},
-    '酸辣土豆丝': {'main': ['土豆'], 'side': ['干辣椒', '蒜'], 'season': ['醋', '盐', '油'], 'methods': ['爆炒']},
+    '酸辣土豆丝': {'main': ['土豆'], 'side': ['干辣椒', '蒜'], 'season': ['醋', '盐', '油'], 'methods': ['炒']},
     '鸡蛋羹': {'main': ['鸡蛋'], 'side': ['葱'], 'season': ['盐', '生抽'], 'methods': ['清蒸']},
     '蒸蛋': {'main': ['鸡蛋'], 'side': ['葱'], 'season': ['盐', '生抽'], 'methods': ['清蒸']},
     '炸鸡翅': {'main': ['鸡翅'], 'side': ['面粉', '鸡蛋'], 'season': ['盐', '胡椒粉', '料酒', '油'], 'methods': ['油炸']},
@@ -205,15 +205,23 @@ def rule_draft(dish, description, known_recipes):
     src, info = match_known(dish, known_recipes)
     site_tools = []
     if src == 'site':
-        ings = [shop.strip_brackets(x).strip() for x in shop.split_list(info.get('ingredients_list') or '')]
+        # 食材按原菜谱的清单，跟采购清单同一套判断：调味料、可选的算家里已有
+        # 主料：清单里带肉、蛋、菜、主食字眼的（最多 3 样）；一个都没有就取第一样
         main, side, season = [], [], []
-        catalog_pantry = _pantry_words()
-        for x in ings:
-            x = re.sub(r'\s*\d.*$', '', x).strip() or x
-            (season if any(w in x for w in catalog_pantry) else main if len(main) < 2 else side).append(x)
+        for row in shop.shopping_list(info.get('ingredients_list') or '', shop.load_shop()):
+            x = re.sub(r'\s*\d.*$', '', shop.strip_brackets(row['raw'])).strip() or row['name']
+            if row['at_home']:
+                season.append(x + ('（可选）' if row['optional'] else ''))
+            elif len(main) < 3 and any(w in x for w in FOOD_WORDS) and not re.search(r'(酱|醋|粉|油)$', x):
+                main.append(x)
+            else:
+                side.append(x)
+        if not main and side:
+            main.append(side.pop(0))
         site_tools = pots_from_tools_text(info.get('tools_list'))
-        # 站内菜谱的锅是作者实际用的，做法按锅反推（步骤文字里「烧开水」「搅拌」这类词容易误判）
-        methods = list(dict.fromkeys(POT_METHOD[p] for p in POT_METHOD if p in site_tools)) or methods_from_text(text)
+        # 做法看菜名和每一步的标题（「煎鸡翅」「炸虾球」「炒饭调味」），步骤正文里「烧开水」「搅拌」这类词容易误判，不看
+        # 都看不出来时才按锅反推
+        methods = site_methods(info) or list(dict.fromkeys(POT_METHOD[p] for p in POT_METHOD if p in site_tools))
         matched = f'稳厨菜谱「{info["name"]}」'
     elif src == 'common':
         main, side, season = list(info['main']), list(info['side']), list(info['season'])
@@ -228,7 +236,101 @@ def rule_draft(dish, description, known_recipes):
         methods = methods_from_text(text)
         matched = ''
     return {'main': main, 'side': side, 'season': season, 'methods': methods,
-            'site_tools': site_tools, 'matched': matched, 'tips': ''}
+            'site_tools': site_tools, 'matched': matched, 'tips': '',
+            'site_id': info.get('id') if src == 'site' else None,
+            'ingredients_list': info.get('ingredients_list') if src == 'site' else None}
+
+
+# 步骤标题里不算做法的说法：「拌面」「拌饭」是出锅前拌一拌，「腌制」是备料，不是凉拌
+STEP_IGNORE = ['搅拌', '拌面', '拌饭', '抓拌', '拌匀', '拌好', '腌制', '调酱', '酱汁',
+               '烧至', '烧开', '烧热', '烧油', '烧到', '烧好', '热水', '水蒸气', '融化', '炸至', '收汁']
+
+
+def site_methods(info):
+    # 站内菜的做法：菜名 + 步骤标题，按出现先后排
+    parts = [info.get('name') or ''] + list(info.get('step_titles') or [])
+    found = []
+    for part in parts:
+        for w in STEP_IGNORE:
+            part = part.replace(w, ' ')
+        for m in methods_from_text(part):
+            if m not in found:
+                found.append(m)
+    # 菜谱用到的锅，如果上面的做法都解释不了（比如意面的平底锅是用来炒酱的），再看用这口锅那几步的正文
+    covered = {n for m in found for n, _, _ in RULES.get(m, [])}
+    for pot in pots_from_tools_text(info.get('tools_list')):
+        if pot not in POT_METHOD or pot in covered:
+            continue
+        for st in info.get('steps') or []:
+            if pot not in (st.get('tools') or ''):
+                continue
+            text = st.get('action') or ''
+            for w in STEP_IGNORE:
+                text = text.replace(w, ' ')
+            for m in methods_from_text(text):
+                if m not in found and m not in ('凉拌', '打发'):
+                    found.append(m)
+    return found[:4]
+
+
+def build_site_cookware(methods, site_tools):
+    # 站内菜：锅具一件不多一件不少，就是菜谱里写的（加上刀、案板）；原因能对上规则就用规则的话
+    reasons = {}
+    for m in methods:
+        for name, reason, alt in RULES.get(m, []):
+            reasons.setdefault(name, (f'{m}：{reason}', alt))
+    items = []
+    for name in list(site_tools) + [n for n, _, _ in BASIC if n not in site_tools]:
+        basic = next((r for n, r, _ in BASIC if n == name), None)
+        reason, alt = reasons.get(name, (basic or '稳厨菜谱里这道菜就用它', ''))
+        items.append({'name': name, 'reason': reason, 'alt': alt, 'source': 'rule'})
+    return items
+
+
+# 步骤标题里不算做法的说法：「拌面」「拌饭」是出锅前拌一拌，「腌制」是备料，不是凉拌
+STEP_IGNORE = ['搅拌', '拌面', '拌饭', '抓拌', '拌匀', '拌好', '腌制', '调酱', '酱汁',
+               '烧至', '烧开', '烧热', '烧油', '烧到', '烧好', '热水', '水蒸气', '融化', '炸至', '收汁']
+
+
+def site_methods(info):
+    # 站内菜的做法：菜名 + 步骤标题，按出现先后排
+    parts = [info.get('name') or ''] + list(info.get('step_titles') or [])
+    found = []
+    for part in parts:
+        for w in STEP_IGNORE:
+            part = part.replace(w, ' ')
+        for m in methods_from_text(part):
+            if m not in found:
+                found.append(m)
+    # 菜谱用到的锅，如果上面的做法都解释不了（比如意面的平底锅是用来炒酱的），再看用这口锅那几步的正文
+    covered = {n for m in found for n, _, _ in RULES.get(m, [])}
+    for pot in pots_from_tools_text(info.get('tools_list')):
+        if pot not in POT_METHOD or pot in covered:
+            continue
+        for st in info.get('steps') or []:
+            if pot not in (st.get('tools') or ''):
+                continue
+            text = st.get('action') or ''
+            for w in STEP_IGNORE:
+                text = text.replace(w, ' ')
+            for m in methods_from_text(text):
+                if m not in found and m not in ('凉拌', '打发'):
+                    found.append(m)
+    return found[:4]
+
+
+def build_site_cookware(methods, site_tools):
+    # 站内菜：锅具一件不多一件不少，就是菜谱里写的（加上刀、案板）；原因能对上规则就用规则的话
+    reasons = {}
+    for m in methods:
+        for name, reason, alt in RULES.get(m, []):
+            reasons.setdefault(name, (f'{m}：{reason}', alt))
+    items = []
+    for name in list(site_tools) + [n for n, _, _ in BASIC if n not in site_tools]:
+        basic = next((r for n, r, _ in BASIC if n == name), None)
+        reason, alt = reasons.get(name, (basic or '稳厨菜谱里这道菜就用它', ''))
+        items.append({'name': name, 'reason': reason, 'alt': alt, 'source': 'rule'})
+    return items
 
 
 def _pantry_words():

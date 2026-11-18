@@ -664,6 +664,8 @@ def known_recipes_for_rules(conn):
         steps = conn.execute('SELECT title, action, tools FROM recipe_steps WHERE recipe_id = ? ORDER BY step_no', (r['id'],)).fetchall()
         result.append({'id': r['id'], 'name': r['name'], 'ingredients_list': r['ingredients_list'] or '',
                        'tools_list': ' 、'.join([r['tools_list'] or ''] + [s['tools'] or '' for s in steps]),
+                       'step_titles': [s['title'] or '' for s in steps],
+                       'steps': [{'title': s['title'] or '', 'action': s['action'] or '', 'tools': s['tools'] or ''} for s in steps],
                        'steps_text': ' '.join((s['title'] or '') + ' ' + (s['action'] or '') for s in steps)})
     return result
 @app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：输入一道菜，拆出食材、做法、锅具、缺什么、花多少
