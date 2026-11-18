@@ -296,7 +296,22 @@ try:
     check('详情浏览也记进库', con.execute('SELECT COUNT(*) FROM recipe_views').fetchone()[0] > 0)
     con.close()
 
-    print('13. 收尾')
+    print('13. 菜品图（AI 生成，已压缩）')
+    con = sqlite3.connect(TEST_DB)
+    imgs = con.execute("SELECT id, image FROM recipes WHERE is_official = 1 ORDER BY id").fetchall()
+    con.close()
+    check('12 道现成菜都有菜品图', len(imgs) == 12 and all(i and i.startswith('/static/dishes/') for _, i in imgs))
+    sizes = [os.path.getsize(os.path.join(ROOT, i.lstrip('/'))) for _, i in imgs]
+    check('图片文件都在且单张不超过 150KB', all(sz <= 150 * 1024 for sz in sizes), sizes)
+    check('图片网址能打开', all(anon.get(i).status_code == 200 for _, i in imgs))
+    h = text(anon.get('/all'))
+    check('列表页显示菜品图', h.count('src="/static/dishes/') >= 12)
+    check('详情页显示菜品图', 'src="/static/dishes/recipe-12.webp"' in text(anon.get('/recipe/12')))
+    recs = shopper.get('/daily_recommend').get_json()['recipes']
+    check('首页推荐带图片地址', recs and all((x['image'] or '').startswith('/static/dishes/') for x in recs if x['id'] <= 12))
+    check('首页推荐弹窗会显示小图', 'rec-thumb' in open(os.path.join(ROOT, 'templates', 'index.html'), encoding='utf-8').read())
+
+    print('14. 收尾')
     check('交付库一个字节都没变', hashlib.md5(open(REAL_DB, 'rb').read()).hexdigest() == real_db_hash)
 finally:
     shutil.rmtree(TMP, ignore_errors=True)

@@ -581,7 +581,7 @@ def daily_recommend():
     conn = get_db()
     try:
         rows = conn.execute(
-            f'''SELECT DISTINCT recipes.id, recipes.name FROM recipes
+            f'''SELECT DISTINCT recipes.id, recipes.name, recipes.image FROM recipes
             WHERE recipes.id NOT IN (SELECT recipe_id FROM questions)
             AND recipes.id IN (SELECT recipe_id FROM recipe_steps WHERE {conditions})
             ORDER BY RANDOM() LIMIT 3''',
@@ -589,7 +589,7 @@ def daily_recommend():
         ).fetchall()
     finally:
         conn.close()
-    return {'recipes': [{'id': r['id'], 'name': r['name']} for r in rows], 'need_profile': False}
+    return {'recipes': [{'id': r['id'], 'name': r['name'], 'image': r['image']} for r in rows], 'need_profile': False}
 @app.route('/vote', methods=['POST'])
 def vote():
     if not current_user():

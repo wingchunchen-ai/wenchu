@@ -51,6 +51,14 @@ function renderRecommend(data) {
   }
   data.recipes.forEach(r => {
     const p = document.createElement('p');
+    p.className = 'rec-item';
+    if (r.image && r.image.startsWith('/')) {  // 有菜品图就配一张小图
+      const img = document.createElement('img');
+      img.src = r.image;
+      img.alt = r.name;
+      img.className = 'rec-thumb';
+      p.appendChild(img);
+    }
     const a = document.createElement('a');
     a.href = '/recipe/' + encodeURIComponent(r.id);
     a.textContent = r.name;

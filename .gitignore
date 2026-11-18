@@ -3,3 +3,5 @@ __pycache__/
 instance/
 .venv/
 screenshots/
+dish-images-incoming/
+dish-gen/
