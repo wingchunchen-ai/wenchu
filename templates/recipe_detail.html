@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>{{ recipe['name'] }}｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=verified-recipe-route-1">
+  {% include "_pwa_head.html" %}
+</head>
+<body class="screen-recipe">
+{% include "_pwa_install.html" %}
+{% from "_recipe_media.html" import recipe_media %}
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a class="active" href="/recipes">找菜</a><a href="/profile">我的厨房</a></nav>
+    <a class="header-action" href="/recipes">回到找菜 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="detail-main" data-recipe-id="{{ recipe['id'] }}">
+    <div class="breadcrumbs"><a href="/recipes">找菜</a><span>/</span><span>{{ recipe['category'] or '家常菜' }}</span><span>/</span><strong>{{ recipe['name'] }}</strong></div>
+    <section class="detail-hero">
+      <div class="detail-hero-copy">
+        <div class="detail-tags"><span class="tag tag-category">{{ recipe['category'] or '家常菜' }}</span><span class="tag tag-time">◷ {% if recipe['time_minutes'] %}约 {{ recipe['time_minutes'] }} 分钟{% else %}按自己的节奏{% endif %}</span></div>
+        <div class="eyebrow"><span class="eyebrow-dot"></span> 稳厨菜谱 · {{ '%02d'|format(recipe['id']) }}</div>
+        <h1>{{ recipe['name'] }}</h1>
+        <p>{{ recipe['description'] }}</p>
+        <div class="detail-hero-actions"><a class="button button-primary" href="#steps">开始做这道菜 <span aria-hidden="true">↓</span></a><span class="detail-step-count">{{ steps|length }} 个步骤 · 有安全提示</span></div>
+      </div>
+      <div class="detail-hero-image">
+        {{ recipe_media(recipe, 'recipe-art--detail') }}
+        <span class="detail-image-label">一顿家常，认真做好</span>
+      </div>
+    </section>
+
+    {% if is_verified_recipe %}
+    <section class="verified-recipe-note" role="status">
+      <div>
+        <span class="dish-route-kicker">稳厨已验证菜谱 · 本地方案 · 免 AI</span>
+        <h2>这份标准做法不调用 AI</h2>
+        <p>你可以直接按稳厨已有的步骤、食材和锅具提示开做。若份量、口味、过敏或锅具条件需要个性化，点右侧入口重新分析；个性化条件不同不会套用这份旧方案。</p>
+      </div>
+      <a class="button button-primary" href="{{ url_for('dish_planner', dish_name=recipe['name']) }}">按我的条件重新分析 <span aria-hidden="true">→</span></a>
+    </section>
+    {% endif %}
+
+    <section class="detail-summary" aria-label="菜谱摘要">
+      <div><span class="summary-icon">◷</span><span><small>预计用时</small><strong>{% if recipe['time_minutes'] %}{{ recipe['time_minutes'] }} 分钟{% else %}看你的节奏{% endif %}</strong></span></div>
+      <div><span class="summary-icon">☷</span><span><small>烹饪步骤</small><strong>{{ steps|length }} 步，慢慢来</strong></span></div>
+      <div><span class="summary-icon">✳</span><span><small>稳厨提醒</small><strong>每步留意安全细节</strong></span></div>
+    </section>
+
+    <div class="detail-layout">
+      <section class="steps-column" id="steps">
+        <div class="steps-heading">
+          <div><div class="eyebrow"><span class="eyebrow-dot"></span> 厨房里的下一步</div><h2>一步一步来</h2><p>做完一项就点一下，离开页面后进度也会留在这台设备上。</p></div>
+          <button class="text-button" id="reset-progress" type="button">重置进度</button>
+        </div>
+        <div class="progress-panel"><div class="progress-top"><span>今天做菜进度</span><strong id="progress-label">0 / {{ steps|length }} 步完成</strong></div><div class="progress-track"><span id="progress-fill"></span></div></div>
+        <div class="step-list" id="step-list">
+          {% for step in steps %}
+          <article class="step-card" data-step="{{ loop.index0 }}">
+            <button class="step-check" type="button" aria-label="标记第{{ loop.index }}步完成" aria-pressed="false"><span>✓</span></button>
+            <div class="step-content">
+              <div class="step-number">STEP {{ '%02d'|format(loop.index) }}</div>
+              <h3>{{ step['title'] }}</h3>
+              <p class="step-action">{{ step['action'] }}</p>
+              {% if step['tools'] %}<div class="step-tool"><span>用到</span>{{ step['tools'] }}</div>{% endif %}
+              {% if step['tool_usage'] %}<p class="step-tool-usage">{{ step['tool_usage'] }}</p>{% endif %}
+              {% if step['safety_tip'] %}<aside class="safety-note"><span class="safety-icon">!</span><div><strong>稳妥提醒</strong><p>{{ step['safety_tip'] }}</p></div></aside>{% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <aside class="detail-sidebar">
+        <section class="side-card kitchen-match-card">
+          <div class="side-card-heading"><span class="side-icon">⌂</span><div><span class="eyebrow eyebrow-small">开火前先确认</span><h3>你的锅，合适吗？</h3></div></div>
+          {% if has_cookware_profile %}
+            {% if missing_cookware %}
+              <div class="match-message match-message-warn"><strong>可能还需要这些锅具</strong><p>按步骤中出现的主要厨具判断，家里已有的小工具可能可以替代。</p></div>
+              <div class="cookware-tags cookware-tags-light">{% for item in missing_cookware %}<span>{{ item }}</span>{% endfor %}</div>
+            {% else %}
+              <div class="match-message"><strong>这道菜和你家的锅具相配。</strong><p>可以照着步骤准备，开火前再核对一下具体工具。</p></div>
+            {% endif %}
+            <a class="side-link" href="/recipes?compatible=1">找更多适合我的菜 <span>→</span></a>
+          {% else %}
+            <div class="match-message"><strong>先告诉稳厨你家有什么锅。</strong><p>之后每次选菜，就能更快知道这道菜是否适合现在的厨房。</p></div>
+            <a class="side-link" href="/profile">设置我的锅具 <span>→</span></a>
+          {% endif %}
+        </section>
+
+        <section class="side-card ingredient-card">
+          <div class="side-card-heading"><span class="side-icon">✳</span><div><span class="eyebrow eyebrow-small">开始之前</span><h3>准备好食材</h3></div></div>
+          {% if recipe['ingredients_list'] %}
+          <ul class="ingredient-list">
+          {% for item in recipe['ingredients_list'].split('、') %}<li><span class="ingredient-check">✓</span>{{ item }}</li>{% endfor %}
+          </ul>
+          {% else %}<p class="muted-copy">这道菜还没有单独列出食材清单。</p>{% endif %}
+          <a class="side-link shopping-side-link" href="/shopping?recipe_id={{ recipe['id'] }}">按这道菜整理待买清单 <span>→</span></a>
+        </section>
+
+        <section class="side-card tools-card">
+          <div class="side-card-heading"><span class="side-icon">⌑</span><div><span class="eyebrow eyebrow-small">顺手备好</span><h3>会用到的厨具</h3></div></div>
+          {% if recipe['tools_list'] %}<div class="tool-chips">{% for item in recipe['tools_list'].split('、') %}<span>{{ item }}</span>{% endfor %}</div>{% else %}<p class="muted-copy">按步骤里的工具提示准备即可。</p>{% endif %}
+          <a class="side-link shopping-side-link" href="/shopping?recipe_id={{ recipe['id'] }}">只看看缺的厨具 <span>→</span></a>
+        </section>
+
+        <section class="side-card question-card">
+          <div class="question-mark">“</div><h3>当前为体验演示版</h3>
+          <p>你可以浏览菜谱、匹配锅具并整理清单；菜谱讨论暂未开放。</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>步骤进度只保存在当前浏览器。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a class="active" href="/recipes" aria-current="page"><span>⌕</span>找菜</a><a href="/profile"><span>◉</span>我的厨房</a></nav>
+<script>
+(() => {
+  const root = document.querySelector('[data-recipe-id]');
+  const id = root.dataset.recipeId;
+  const cards = [...document.querySelectorAll('.step-card')];
+  const key = `wenchu-progress-${id}`;
+  const label = document.getElementById('progress-label');
+  const fill = document.getElementById('progress-fill');
+  let completed = new Set();
+  try { completed = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch (_) { completed = new Set(); }
+  function paint() {
+    cards.forEach((card, index) => {
+      const done = completed.has(index);
+      card.classList.toggle('is-complete', done);
+      card.querySelector('.step-check').setAttribute('aria-pressed', String(done));
+    });
+    label.textContent = `${completed.size} / ${cards.length} 步完成`;
+    fill.style.width = `${cards.length ? completed.size / cards.length * 100 : 0}%`;
+    localStorage.setItem(key, JSON.stringify([...completed]));
+  }
+  cards.forEach((card, index) => card.querySelector('.step-check').addEventListener('click', () => {
+    if (completed.has(index)) completed.delete(index); else completed.add(index);
+    paint();
+  }));
+  document.getElementById('reset-progress').addEventListener('click', () => { completed.clear(); paint(); });
+  paint();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>知识库复核｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=knowledge-review-alias-3">
+  {% include "_pwa_head.html" %}
+</head>
+<body class="screen-dish-planner">
+{% include "_pwa_install.html" %}
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a href="/dish-planner">上传一道菜</a><a href="/recipes">找菜</a><a class="active" href="/knowledge-review">知识复核</a></nav>
+    <a class="header-action" href="/dish-planner">回到菜品分析 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="knowledge-review-main">
+    <div class="breadcrumbs"><a href="/">首页</a><span>/</span><a href="/dish-planner">菜品分析</a><span>/</span><strong>知识库复核</strong></div>
+    <section class="knowledge-review-hero">
+      <div class="eyebrow"><span class="eyebrow-dot"></span>稳厨的学习闭环</div>
+      <h1>知识库复核</h1>
+      <p>稳厨自己的菜谱与安全经验作为底座；用户保存的新方案和 AI 提出的新叫法先进入待复核区。只有方案复核通过后，历史经验才可复用、对应别名才参与本地联想。</p>
+      <div class="knowledge-review-summary">
+        {% if reviewer_authenticated %}<span><strong>{{ review_pending_count }}</strong> 条待复核或到期</span>{% else %}<span>复核队列仅限内部授权人员查看</span>{% endif %}
+        <span>建议每周检查待复核记录</span>
+        <span>已通过经验每 {{ review_interval_days }} 天再次复核</span>
+        <span>菜品原图与原始补充文字不入库</span>
+      </div>
+    </section>
+
+    {% if review_error %}<div class="dish-analysis-error" role="alert">{{ review_error }}</div>{% endif %}
+
+    {% if review_token_configured and not reviewer_authenticated %}
+    <section class="knowledge-review-auth">
+      <div><strong>内部复核操作</strong><p>队列内容与复核操作均需管理员口令授权。</p></div>
+      <form action="/knowledge-review/access" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="review-token">管理员口令</label>
+        <input id="review-token" name="review_token" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" type="submit">进入复核</button>
+      </form>
+    </section>
+    {% elif not review_token_configured %}
+    <div class="knowledge-review-readonly" role="status">尚未配置管理员口令，待复核队列内容暂不可查看。配置服务端环境变量 <code>WENCHU_REVIEW_TOKEN</code> 后，内部审核者才能访问和整理队列。</div>
+    {% else %}
+    <form class="knowledge-review-logout" action="/knowledge-review/logout" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <span>内部复核模式已授权</span><button type="submit">退出复核</button>
+    </form>
+    {% endif %}
+
+    {% if reviewer_authenticated %}
+    <section class="knowledge-review-list" aria-labelledby="review-list-title">
+      <div class="knowledge-review-list-heading"><div><span class="eyebrow eyebrow-small">待处理记录</span><h2 id="review-list-title">待复核与到期方案</h2></div><a class="button button-quiet" href="/dish-planner">返回分析</a></div>
+      {% if review_records %}
+      <div class="knowledge-review-cards">
+        {% for record in review_records %}
+        <article class="knowledge-record" id="record-{{ record['id'] }}">
+          <div class="knowledge-record-top">
+            <div><span class="knowledge-record-id">记录 #{{ record['id'] }}</span><h3>{{ record['dish_name'] }}</h3></div>
+            <span class="knowledge-status {% if record['review_status'] == 'needs_update' %}is-update{% elif record['overdue'] %}is-overdue{% else %}is-pending{% endif %}">{% if record['review_status'] == 'needs_update' %}需要更新{% elif record['overdue'] %}到期复核{% elif record['review_status'] == 'reviewed' %}复核已到期{% else %}待复核{% endif %}</span>
+          </div>
+          <p class="knowledge-record-summary">{{ record['analysis'].get('summary', '暂无做法摘要') }}</p>
+          {% if record['analysis'].get('standard_recipe_id') %}<p class="knowledge-alias-review"><strong>稳厨标准名：</strong>{{ record['analysis'].get('standard_name') }}；本次不会新建标准菜谱。</p>{% endif %}
+          {% if record['alias_candidates'] %}<p class="knowledge-alias-review"><strong>待复核别名：</strong>{{ record['alias_candidates']|join('、') }} → {{ record['analysis'].get('standard_name') }}；通过本条方案复核后才用于本地联想。</p>{% endif %}
+          <div class="knowledge-record-details">
+            {% if record['analysis'].get('cookware') %}<p><strong>锅具：</strong>{% for item in record['analysis']['cookware'][:4] %}{{ item.get('name', '') }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+            {% if record['analysis'].get('ingredients') %}<p><strong>主要食材：</strong>{% for item in record['analysis']['ingredients'][:6] %}{{ item.get('name', '') }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+            {% if record['analysis'].get('tips') %}<p><strong>避坑提示：</strong>{{ record['analysis']['tips'][:3]|join('；') }}</p>{% endif %}
+          </div>
+          <div class="knowledge-record-meta"><span>最近更新：{{ record['updated_at'][:10] }}</span><span>下次复核：{{ record['next_review_at'][:10] }}</span><span>历史命中：{{ record['hit_count'] }} 次</span></div>
+          {% if record['review_note'] %}<p class="knowledge-review-note"><strong>上次复核意见：</strong>{{ record['review_note'] }}</p>{% endif %}
+          {% if reviewer_authenticated %}
+          <form class="knowledge-review-action" action="/knowledge-review/{{ record['id'] }}/review" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="review-note-{{ record['id'] }}">复核补充或修正（可选；通过后会作为经验参考）</label>
+            <textarea id="review-note-{{ record['id'] }}" name="review_note" rows="2" maxlength="1000" placeholder="例如：两人份建议鸡翅约500克；先擦干再煎，可减少溅油。">{{ record['review_note'] }}</textarea>
+            <div><button class="button button-primary" type="submit" name="outcome" value="reviewed">复核通过，纳入经验库</button><button class="button button-quiet" type="submit" name="outcome" value="needs_update">需要更新，下次重新分析</button></div>
+          </form>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% elif not review_aliases %}
+      <div class="knowledge-review-empty"><strong>复核队列暂时为空</strong><p>新分析会进入待复核队列；已通过的经验超过 {{ review_interval_days }} 天后重新到期，并暂时不再命中历史缓存。建议每周检查一次队列。</p><a class="button button-primary" href="/dish-planner">分析一道菜</a></div>
+      {% else %}
+      <div class="knowledge-review-empty"><strong>方案队列暂时为空</strong><p>目前有待单独复核的菜名别名，请在下方核对。</p></div>
+      {% endif %}
+    </section>
+    <section class="knowledge-review-list knowledge-alias-list" aria-labelledby="alias-list-title">
+      <div class="knowledge-review-list-heading"><div><span class="eyebrow eyebrow-small">本地菜名联想</span><h2 id="alias-list-title">待复核别名</h2></div></div>
+      {% if review_aliases %}
+      <div class="knowledge-review-cards">
+        {% for alias in review_aliases %}
+        <article class="knowledge-record knowledge-alias-record">
+          <div class="knowledge-record-top">
+            <div><span class="knowledge-record-id">别名映射</span><h3>“{{ alias['alias_text'] }}” → {{ alias['recipe_name'] }}</h3></div>
+            <span class="knowledge-status {% if alias['review_status'] == 'needs_update' %}is-update{% elif alias['overdue'] %}is-overdue{% else %}is-pending{% endif %}">{% if alias['review_status'] == 'needs_update' %}需要更新{% elif alias['overdue'] %}到期复核{% else %}待复核{% endif %}</span>
+          </div>
+          <p class="knowledge-record-summary">确认这个新叫法是否确实指向稳厨已收录的标准菜。审核通过后才会出现在菜名联想中；不会新增菜谱或分析记录。</p>
+          {% if alias['review_note'] %}<p class="knowledge-review-note"><strong>上次复核意见：</strong>{{ alias['review_note'] }}</p>{% endif %}
+          <form class="knowledge-review-action" action="/knowledge-review/alias" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="alias_key" value="{{ alias['alias_key'] }}">
+            <label for="alias-review-note-{{ loop.index }}">复核补充或修正（可选）</label>
+            <textarea id="alias-review-note-{{ loop.index }}" name="review_note" rows="2" maxlength="1000" placeholder="若这个叫法有歧义，请说明。">{{ alias['review_note'] }}</textarea>
+            <div><button class="button button-primary" type="submit" name="outcome" value="reviewed">通过别名</button><button class="button button-quiet" type="submit" name="outcome" value="needs_update">需要更新</button></div>
+          </form>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="knowledge-review-empty"><strong>暂无单独待复核别名</strong><p>新 AI 叫法通常会随它的方案一起进入复核；若目标菜方案已经通过审核，别名会在这里单独等待复核。</p></div>
+      {% endif %}
+    </section>
+    {% else %}
+    <section class="knowledge-review-empty" role="status"><strong>复核队列内容受保护</strong><p>请先配置并使用管理员口令登录；未授权时不会显示任何菜品分析记录。</p><a class="button button-quiet" href="/dish-planner">返回菜品分析</a></section>
+    {% endif %}
+
+    <aside class="knowledge-review-policy"><strong>复核如何让稳厨变强</strong><ol><li>核对菜名、标准名归并、锅具适配、食材份量与食品安全提醒。</li><li>检查待审核别名是否确实指向该标准菜；发现错误叫法、过时方案或不可靠内容时标为“需要更新”。</li><li>通过的记录会在同锅具配置下作为额外参考；别名同步启用，到期后方案和别名一起暂停并重新复核。</li></ol></aside>
+  </main>
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>从你想做的菜开始，好好吃饭。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a href="/dish-planner"><span>＋</span>传一道菜</a><a class="active" href="/knowledge-review" aria-current="page"><span>✓</span>知识复核</a></nav>
+</body>
+</html>

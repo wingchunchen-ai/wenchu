@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>质疑</title>
+</head>
+<body>
+    <h1>质疑详情</h1>
+    <p>
+        菜：<a href="/recipe/{{ question['recipe_id'] }}">{{ question['recipe_name'] }}</a>
+    </p>
+    <p>{{ question['question_text'] }}</p>
+    <p>（{{ question['nickname'] }}，{{ question['created_at'] }}）</p>
+    <h3>站队结果</h3>
+    {% if counts %}
+    <ul>
+    {% for c in counts %}
+        <li>{{ c['verdict'] }}：{{ c['num'] }}票</li>
+    {% endfor %}
+    </ul>
+    {% else %}
+    <p>还没有人表态</p>
+    {% endif %}
+    <h3>你觉得这条质疑对不对？</h3>
+    <!-- 站队表单：点按钮就把裁决发到 /verdict 路由 -->
+    <form action="/verdict" method="post">
+        <input type="hidden" name="question_id" value="{{ question['id'] }}">
+        <input type="hidden" name="verdict" value="确实有错">
+        <button type="submit">确实有错</button>
+    </form>
+    <form action="/verdict" method="post">
+        <input type="hidden" name="question_id" value="{{ question['id'] }}">
+        <input type="hidden" name="verdict" value="质疑不对">
+        <button type="submit">质疑不对</button>
+    </form>
+</body>
+</html>

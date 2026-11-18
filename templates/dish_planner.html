@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>问一道菜怎么做｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=home-intents-20261118">
+  {% include "_pwa_head.html" %}
+</head>
+<body class="screen-dish-planner">
+{% include "_pwa_install.html" %}
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a class="active" href="/dish-planner">问菜怎么做</a><a href="/recipes">逛菜谱</a><a href="/profile">我的厨房</a></nav>
+    <a class="header-action" href="/profile">告诉稳厨你有哪些锅 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="dish-main">
+    <div class="breadcrumbs"><a href="/">首页</a><span>/</span><strong>问一道菜怎么做</strong></div>
+    <section class="dish-intro">
+      <div class="dish-intro-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> 菜名或照片都可以</div>
+        <h1>想做这道菜？<br><em>稳厨告诉你怎么做。</em></h1>
+        <p>写下菜名，或选一张照片；再补充人数、家里的锅或口味偏好。稳厨会给你食材建议、替代办法和清楚的步骤。</p>
+      </div>
+      <div class="dish-intro-stamp"><span>一道菜</span><strong>→</strong><span>一顿饭的方案</span><i>✳</i></div>
+    </section>
+
+    <section class="dish-workbench" aria-label="菜品输入与智能分析">
+      <div class="dish-input-card">
+        <div class="dish-card-heading"><span class="dish-number">01</span><div><span class="eyebrow eyebrow-small">告诉稳厨你想做什么</span><h2>这道菜怎么做？</h2></div></div>
+        <p class="dish-input-guidance">输入菜名或选一张照片。想按家里的锅、人数或口味来调整，也可以顺手补充说明。</p>
+        {% if analysis_error %}<div class="dish-analysis-error" role="alert">{{ analysis_error }}</div>{% endif %}
+        <form class="dish-analysis-form" id="dish-analysis-form" action="/analyze-dish" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="sample_recipe_id" value="{{ recipe['id'] }}">
+          <div class="dish-upload-zone">
+            <input class="dish-photo-input" id="dish-photo" name="dish_image" type="file" accept="image/*" aria-label="选择一道菜的照片">
+            <span class="dish-upload-icon" aria-hidden="true">＋</span>
+            <strong>拍一道菜，让稳厨看看</strong>
+            <small>大照片会在本机压缩；选好可先预览，提交后才上传</small>
+            <div class="dish-photo-actions" role="group" aria-label="选择菜品照片来源">
+              <label class="dish-photo-action is-camera" id="dish-camera-action" for="dish-photo">拍照</label>
+              <label class="dish-photo-action" id="dish-gallery-action" for="dish-photo">从相册选择</label>
+            </div>
+            <img id="dish-photo-preview" alt="你选择的菜品照片预览" hidden>
+          </div>
+          <label class="dish-field-label" for="dish-name">输入菜名（边输入边查稳厨本地菜谱）</label>
+          <div class="dish-name-autocomplete">
+            <input class="dish-text-input" id="dish-name" name="dish_name" type="text" maxlength="120" value="{{ submitted_dish_name }}" placeholder="例如：可乐翅、鸡翅" autocomplete="off" aria-autocomplete="list" aria-controls="dish-name-suggestions" aria-expanded="false">
+            <div class="dish-name-suggestions" id="dish-name-suggestions" role="listbox" aria-label="稳厨本地菜名匹配" hidden></div>
+          </div>
+          <p class="dish-name-local-status" id="dish-name-local-status" aria-live="polite" hidden></p>
+          <label class="dish-field-label" for="dish-notes">补充要求（可选）</label>
+          <textarea class="dish-notes-input" id="dish-notes" name="dish_notes" maxlength="500" rows="2" placeholder="例如：两人份；我家只有平底锅；不吃辣">{{ submitted_notes }}</textarea>
+          <p class="dish-local-note" id="dish-local-note">标准菜名和已审核别名先在本地匹配；历史方案还须菜名、补充要求、锅具及（如有）照片指纹完全一致，且仍在 {{ review_interval_days }} 天有效期内，才会复用。新方案待复核期间不会复用；若选择本地菜谱直达，照片不会发送或保存；原始补充文字也不会入库。</p>
+          <label class="dish-consent"><input type="checkbox" name="consent" value="yes" required><span>我同意用本次输入查找已通过复核且未到期的历史方案；未命中时才将文字和照片发送给 DeepSeek 分析。</span></label>
+          <label class="dish-consent dish-save-consent"><input type="checkbox" name="save_analysis" value="yes" required><span>我同意保存新生成的条件专属方案进入待复核队列；如果 AI 认为输入叫法对应已有稳厨标准菜，叫法也会作为待审核别名。复核通过后才参与联想；不新增重复标准菜谱，不保存原图或原始补充文字。</span></label>
+          <div class="dish-upload-feedback" id="dish-upload-feedback" aria-live="polite" hidden>
+            <div class="dish-upload-progress-row" id="dish-upload-progress-row" hidden>
+              <div class="dish-upload-progress" id="dish-upload-progress" role="progressbar" aria-label="图片上传进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="dish-upload-progress-fill"></span></div>
+              <span id="dish-upload-percent">0%</span>
+            </div>
+            <p id="dish-upload-message"></p>
+          </div>
+          <button class="button button-primary dish-show-plan" type="submit">看看怎么做 <span aria-hidden="true">→</span></button>
+        </form>
+        <p class="dish-demo-disclosure">下方预置结果仅示范输出结构，不是对你刚才输入的实时判断；AI 结果会单独标注，请核对菜名、份量、过敏原和火候。</p>
+      </div>
+
+      <aside class="dish-promise-card">
+        <div class="eyebrow eyebrow-light"><span class="eyebrow-dot"></span> 不只是“AI写菜谱”</div>
+        <h2>把菜，变成你家做得到的一顿饭。</h2>
+        <div class="dish-promise-list">
+          <div><span>01</span><p><strong>先在本地匹配标准菜名</strong><small>标准名或已审核别名命中就免 AI；未选匹配项或需要个性化时再分析。</small></p></div>
+          <div><span>02</span><p><strong>稳厨经验补上实用判断</strong><small>区分必需和可替代锅具，提醒新手常见失误。</small></p></div>
+          <div><span>03</span><p><strong>按你的厨房重排方案</strong><small>用家里已有的锅，列出食材和能执行的步骤。</small></p></div>
+        </div>
+        {% if has_cookware_profile %}
+        <div class="dish-kitchen-summary"><span>当前厨房</span><div class="cookware-tags">{% for item in cookware_list %}<span>{{ item }}</span>{% endfor %}</div></div>
+        {% else %}
+        <a class="dish-profile-link" href="/profile">设置家里已有的锅，让方案更贴合 <span>→</span></a>
+        {% endif %}
+      </aside>
+    </section>
+
+    <section class="dish-result-section" id="plan">
+      {% if image_received %}<div class="dish-upload-result {% if analysis %}is-complete{% else %}is-received{% endif %}" role="status">{% if analysis_source == 'history' %}图片已接收，命中历史方案；本次没有调用 DeepSeek。{% elif analysis %}图片上传成功，DeepSeek 分析已完成。{% else %}图片已成功上传，但分析未完成；请查看上方提示，重试时需要重新选择图片。{% endif %}</div>{% endif %}
+      {% if analysis %}
+      <div class="dish-result-heading">
+        <div><div class="eyebrow"><span class="eyebrow-dot"></span>{% if analysis_source == 'history' %}复用历史方案 · 本次未调用 AI{% elif analysis_source == 'history_standardized' %}AI确认标准名后复用已审核方案{% else %}DeepSeek 实时分析{% endif %}</div><h2>{{ analysis['dish_name'] }}，稳厨帮你拆怎么做</h2></div>
+        <span class="dish-result-badge">识别把握：{{ analysis['confidence'] }}</span>
+      </div>
+      <div class="dish-knowledge-origin" role="status">
+        {% if analysis_source == 'history' %}
+          这条方案已人工复核且仍在 {{ review_interval_days }} 天有效期内；相同条件下可复用。累计复用 {{ history_hit_count }} 次。
+          {% elif analysis_source == 'history_standardized' %}AI 本次先确认菜名对应的稳厨标准菜；随后命中条件完全一致的已审核方案，没有覆盖或新建方案记录。{% if alias_candidate_saved %}新叫法已独立进入别名复核。{% endif %}
+          {% elif analysis_saved %}新方案已保存为待复核记录；在复核通过前不会用于缓存复用。{% else %}本次 AI 分析完成，但写入历史记录失败；当前结果未进入复用或复核队列。{% endif %}
+        <a href="/knowledge-review">{% if knowledge_review_pending is not none %}查看复核队列（{{ knowledge_review_pending }}）{% else %}查看知识复核说明{% endif %} →</a>
+      </div>
+      {% if analysis.get('standard_name') %}<div class="dish-standard-name"><strong>标准名：</strong>{{ analysis['standard_name'] }}{% if analysis.get('standard_recipe_id') %}<span>稳厨已收录；本次不新增标准菜谱</span>{% else %}<span>AI 给出的名称建议，尚未进入稳厨标准菜谱库</span>{% endif %}</div>{% endif %}
+      {% if analysis.get('alias_candidate') %}<div class="dish-alias-status {% if alias_candidate_saved %}is-pending{% else %}is-unavailable{% endif %}" role="status">{% if alias_candidate_saved and alias_review_separate %}新叫法“{{ analysis['alias_candidate'] }}”已单独进入别名复核；原有已审核方案未被覆盖。{% elif alias_candidate_saved %}新叫法“{{ analysis['alias_candidate'] }}”已随方案进入待复核；审核通过后才用于本地联想。{% else %}新叫法未能加入别名表，请由复核者检查后再决定。{% endif %}</div>{% endif %}
+      <article class="dish-live-result">
+        {% if analysis['identification_note'] %}<p class="dish-identification-note">{{ analysis['identification_note'] }}</p>{% endif %}
+        <div class="dish-live-summary"><span>关键做法</span><p>{{ analysis['summary'] }}</p></div>
+        <div class="dish-live-grid">
+          <section class="dish-live-card">
+            <div class="dish-list-heading"><span>01</span><div><small>先看哪些锅能做</small><h3>锅具与替代方案</h3></div></div>
+            {% if analysis['cookware'] %}<div class="dish-ai-items">
+              {% for item in analysis['cookware'] %}
+              <article class="dish-ai-item">
+                <div class="dish-ai-item-top"><strong>{{ item['name'] }}</strong><span class="dish-role-tag">{{ item['role'] }}</span></div>
+                {% if item['reason'] %}<p>{{ item['reason'] }}</p>{% endif %}
+                {% if item['substitutes'] %}<small><b>可替代：</b>{{ item['substitutes']|join('、') }}</small>{% endif %}
+                {% if item['buy_recommended'] %}<small class="dish-buy-note">这项可能需要准备；先核对家里是否已有可替代厨具。</small>{% endif %}
+              </article>
+              {% endfor %}
+            </div>{% else %}<p class="dish-list-note">未能判断具体锅具，请补充菜品信息后再试。</p>{% endif %}
+          </section>
+          <section class="dish-live-card">
+            <div class="dish-list-heading"><span>02</span><div><small>按份量准备</small><h3>食材清单</h3></div></div>
+            {% if analysis['ingredients'] %}<div class="dish-ai-items">
+              {% for item in analysis['ingredients'] %}
+              <article class="dish-ai-item">
+                <div class="dish-ai-item-top"><strong>{{ item['name'] }}{% if item['amount'] %}<small> · {{ item['amount'] }}</small>{% endif %}</strong><span class="dish-role-tag">{{ item['role'] }}</span></div>
+                {% if item['note'] %}<p>{{ item['note'] }}</p>{% endif %}
+                {% if item['substitutes'] %}<small><b>可替代：</b>{{ item['substitutes']|join('、') }}</small>{% endif %}
+              </article>
+              {% endfor %}
+            </div>{% else %}<p class="dish-list-note">未能整理出食材清单，请补充菜名后再试。</p>{% endif %}
+          </section>
+        </div>
+        <section class="dish-live-card dish-live-steps-card">
+          <div class="dish-list-heading"><span>03</span><div><small>照着顺序来</small><h3>新手做法</h3></div></div>
+          {% if analysis['steps'] %}<ol class="dish-ai-steps">
+            {% for step in analysis['steps'] %}
+            <li><span class="dish-ai-step-index">{{ '%02d'|format(loop.index) }}</span><div><strong>{{ step['title'] }}</strong><p>{{ step['action'] }}</p>
+              <div class="dish-ai-step-meta">{% if step['heat'] %}<span>火力：{{ step['heat'] }}</span>{% endif %}{% if step['duration'] %}<span>时间：{{ step['duration'] }}</span>{% endif %}{% if step['tools'] %}<span>工具：{{ step['tools']|join('、') }}</span>{% endif %}</div>
+              {% if step['safety_tip'] %}<small class="dish-step-safety">注意：{{ step['safety_tip'] }}</small>{% endif %}
+            </div></li>
+            {% endfor %}
+          </ol>{% else %}<p class="dish-list-note">暂时没有生成分步做法。</p>{% endif %}
+        </section>
+        <div class="dish-live-grid dish-live-notes-grid">
+          {% if analysis['tips'] %}<section class="dish-experience-note"><span aria-hidden="true">✳</span><div><strong>稳厨新手提醒</strong><ul>{% for item in analysis['tips'] %}<li>{{ item }}</li>{% endfor %}</ul></div></section>{% endif %}
+          {% if analysis['assumptions'] %}<section class="dish-assumption-note"><strong>这些地方还需要你确认</strong><ul>{% for item in analysis['assumptions'] %}<li>{{ item }}</li>{% endfor %}</ul></section>{% endif %}
+        </div>
+        <p class="dish-ai-disclosure">AI 生成内容仅作烹饪参考；菜品识别可能有误，食材与锅具请按实际情况确认，尤其注意生熟、过敏原和高温操作。</p>
+        <div class="dish-result-actions"><a class="button button-primary" href="#dish-analysis-form">调整条件再分析 <span aria-hidden="true">↗</span></a><a class="button button-quiet" href="/profile">更新我的锅具 <span aria-hidden="true">↗</span></a></div>
+      </article>
+      {% elif show_sample_plan %}
+      <div class="dish-result-heading">
+        <div><div class="eyebrow"><span class="eyebrow-dot"></span> 示例结果 · 了解输出长什么样</div><h2>{{ recipe['name'] }}，怎么在你家做？</h2></div>
+        <span class="dish-result-badge">预置样例 · 非 AI 实时识别</span>
+      </div>
+      <article class="dish-plan-card">
+        <div class="dish-plan-top">
+          <div><span class="dish-plan-kicker">关键做法</span><p>{{ method }}</p></div>
+          <div class="dish-plan-stats"><div><strong>{{ ingredients|length }}</strong><small>项食材</small></div><i></i><div><strong>{{ recipe['time_minutes'] or '—' }}</strong><small>分钟</small></div></div>
+        </div>
+        <div class="dish-plan-grid">
+          <section class="dish-list-card">
+            <div class="dish-list-heading"><span>03</span><div><small>从做成这道菜倒推</small><h3>需要哪些食材</h3></div></div>
+            <ul class="dish-ingredient-list">{% for item in ingredients %}<li><span aria-hidden="true">✓</span>{{ item }}</li>{% endfor %}</ul>
+            <p class="dish-list-note">沿用稳厨演示菜谱中的材料；实际产品可按人数、口味和家中库存增减。</p>
+          </section>
+          <section class="dish-list-card dish-cookware-card">
+            <div class="dish-list-heading"><span>04</span><div><small>优先用家里已有的</small><h3>需要什么锅具</h3></div></div>
+            <div class="dish-cookware-choice {% if cookware_match %}is-match{% endif %}">
+              <span class="dish-pot-icon" aria-hidden="true">锅</span>
+              <div><strong>平底锅或炒锅</strong><small>{% if not has_cookware_profile %}可用其中任意一口；设置厨房后可标记是否已有{% elif cookware_match %}你家已有，直接用这口就行{% else %}你当前登记的锅里还没有；看看下方替代建议{% endif %}</small></div>
+              {% if has_cookware_profile and cookware_match %}<b>已有</b>{% endif %}
+            </div>
+            <div class="dish-substitution"><strong>稳厨的替代思路</strong><p>{{ cookware_note }}</p></div>
+            <p class="dish-list-note">不因为菜谱写了某口锅，就默认你必须去买新的。</p>
+          </section>
+        </div>
+        <aside class="dish-experience-note"><span aria-hidden="true">✳</span><div><strong>稳厨经验提醒</strong><p>{{ experience_note }}</p></div></aside>
+        <div class="dish-result-actions"><a class="button button-primary" href="/recipe/{{ recipe['id'] }}">看这道菜的完整步骤 <span aria-hidden="true">→</span></a><a class="button button-quiet" href="/shopping?recipe_id={{ recipe['id'] }}">打开互动食材清单 <span aria-hidden="true">↗</span></a></div>
+      </article>
+      {% else %}
+      <div class="dish-empty-result" role="status">
+        <span class="eyebrow"><span class="eyebrow-dot"></span>等待你的自定义条件</span>
+        <h2>{{ submitted_dish_name }}，交给稳厨按你的条件判断</h2>
+        <p>补充份量、口味或现有锅具后提交。只有严格匹配已审核记录时才会复用；条件不同就会重新分析。</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="dish-why-row">
+      <div><span>AI 的理解力</span><strong>看懂你想做什么</strong><small>从照片或菜名提取目标菜品与做法线索</small></div>
+      <b aria-hidden="true">＋</b>
+      <div><span>稳厨的经验库</span><strong>判断怎么做更稳</strong><small>锅具适配、可替代方案与新手避坑</small></div>
+      <b aria-hidden="true">＝</b>
+      <div><span>用户拿到的</span><strong>一份能开做的方案</strong><small>不是一张孤立菜谱，而是“你家怎么做”</small></div>
+    </section>
+    <section class="dish-knowledge-loop" aria-labelledby="knowledge-loop-title">
+      <div class="dish-knowledge-loop-heading"><div><div class="eyebrow"><span class="eyebrow-dot"></span>让经验越用越准</div><h2 id="knowledge-loop-title">稳厨的知识飞轮</h2></div><a href="/knowledge-review">{% if knowledge_review_pending is not none %}复核队列 · {{ knowledge_review_pending }} 条待处理{% else %}了解复核流程{% endif %} →</a></div>
+      <div class="dish-knowledge-loop-grid">
+        <article><span>01 · 稳厨经验</span><strong>自己的底层规则</strong><p>现有菜谱、厨具判断、安全提醒，始终作为稳厨的基础经验。</p></article>
+        <article><span>02 · 过往经验</span><strong>同条件直接复用</strong><p>菜名、补充要求、锅具和照片（如有）都匹配，且方案已通过人工复核、尚未到期时，才会跳过 AI 并复用。</p></article>
+        <article><span>03 · 每周复核</span><strong>通过后再成为经验</strong><p>新 AI 方案先进入待复核；通过后才可复用，默认 7 天后再次进入复核队列。</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>从你想做的菜开始，好好吃饭。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a class="active" href="/dish-planner" aria-current="page"><span>？</span>问做法</a><a href="/profile"><span>◉</span>我的厨房</a></nav>
+<script type="application/json" id="dish-suggestion-data">{{ dish_suggestion_items|tojson }}</script>
+<script>
+(() => {
+  const input = document.getElementById('dish-name');
+  const box = document.getElementById('dish-name-suggestions');
+  const status = document.getElementById('dish-name-local-status');
+  const notes = document.getElementById('dish-notes');
+  const photo = document.getElementById('dish-photo');
+  if (!input || !box || !status) return;
+  let items = [];
+  try { items = JSON.parse(document.getElementById('dish-suggestion-data').textContent); } catch (_) { items = []; }
+  let matches = [];
+  let activeIndex = -1;
+  const normalize = value => String(value || '').normalize('NFKC').toLocaleLowerCase('zh-CN').replace(/[\s\p{P}\p{S}]/gu, '');
+  const hide = () => {
+    box.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    activeIndex = -1;
+  };
+  const choose = item => {
+    const hasPersonalization = Boolean(notes && notes.value.trim());
+    if (!hasPersonalization) {
+      window.location.href = `/verified-recipe?recipe_id=${encodeURIComponent(item.id)}`;
+      return;
+    }
+    input.value = item.name;
+    hide();
+    status.hidden = false;
+    status.textContent = `已匹配稳厨标准菜名“${item.name}”。你有补充要求，继续提交会按本次条件交给 AI 重新分析，不会直接套用标准方案。`;
+  };
+  const render = () => {
+    const query = normalize(input.value);
+    const ranked = [];
+    for (const item of items) {
+      const terms = [{text: item.name, alias: ''}, ...(item.aliases || []).map(alias => ({text: alias, alias}))];
+      let best = null;
+      for (const term of terms) {
+        const value = normalize(term.text);
+        if (!query) { best = {score: 0, alias: term.alias}; break; }
+        let score = -1;
+        if (value === query) score = 0;
+        else if (value.startsWith(query)) score = 1;
+        else if (value.includes(query)) score = 2;
+        else if (query.length >= 3 && query.includes(value)) score = 3;
+        if (score >= 0 && (!best || score < best.score)) best = {score, alias: term.alias};
+      }
+      if (best) ranked.push({item, ...best});
+    }
+    ranked.sort((a, b) => a.score - b.score || a.item.name.localeCompare(b.item.name, 'zh-CN'));
+    matches = ranked.slice(0, 8);
+    activeIndex = -1;
+    box.replaceChildren();
+    for (const [index, match] of matches.entries()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dish-name-suggestion';
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', 'false');
+      const title = document.createElement('strong');
+      title.textContent = match.item.name;
+      const detail = document.createElement('small');
+      const selectedPhotoIgnored = Boolean(photo && photo.files && photo.files.length && !notes.value.trim());
+      detail.textContent = (match.alias ? `别名“${match.alias}”匹配 · 稳厨已有` : `稳厨已验证 · ${match.item.time_minutes || '—'} 分钟 · 免 AI`) + (selectedPhotoIgnored ? ' · 本地方案，不上传照片' : '');
+      button.append(title, detail);
+      button.addEventListener('mousedown', event => event.preventDefault());
+      button.addEventListener('click', () => choose(match.item));
+      box.append(button);
+      if (index === 0) button.dataset.first = 'true';
+    }
+    if (matches.length) {
+      box.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      status.hidden = false;
+      status.textContent = query ? '稳厨本地匹配，不调用 AI；点选可直接使用标准方案。若有补充要求，点选后会改按本次条件分析；若只上传了照片，点选会使用本地方案且不上传照片。' : '可直接选择稳厨已验证菜谱；也可以继续输入菜名。选中且没有补充要求时免 AI。';
+    } else {
+      hide();
+      if (query) {
+        status.hidden = false;
+        status.textContent = '稳厨本地没有找到匹配项；继续提交即可按你的输入交给 AI 分析。';
+      } else {
+        status.hidden = true;
+      }
+    }
+  };
+  input.addEventListener('focus', render);
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', event => {
+    if (box.hidden || !matches.length) return;
+    const options = [...box.querySelectorAll('.dish-name-suggestion')];
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, options.length - 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault();
+      options[activeIndex].click();
+      return;
+    } else if (event.key === 'Escape') {
+      hide();
+      return;
+    } else {
+      return;
+    }
+    options.forEach((option, index) => {
+      option.setAttribute('aria-selected', String(index === activeIndex));
+      if (index === activeIndex) option.scrollIntoView({block: 'nearest'});
+    });
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.dish-name-autocomplete')) hide();
+  });
+})();
+(() => {
+  const input = document.getElementById('dish-photo');
+  const cameraAction = document.getElementById('dish-camera-action');
+  const galleryAction = document.getElementById('dish-gallery-action');
+  const preview = document.getElementById('dish-photo-preview');
+  const zone = document.querySelector('.dish-upload-zone');
+  const uploadIcon = zone.querySelector('.dish-upload-icon');
+  const uploadTitle = zone.querySelector('strong');
+  const uploadHint = zone.querySelector('small');
+  const note = document.getElementById('dish-local-note');
+  const form = document.getElementById('dish-analysis-form');
+  const feedback = document.getElementById('dish-upload-feedback');
+  const progressRow = document.getElementById('dish-upload-progress-row');
+  const progress = document.getElementById('dish-upload-progress');
+  const progressFill = document.getElementById('dish-upload-progress-fill');
+  const percentLabel = document.getElementById('dish-upload-percent');
+  const message = document.getElementById('dish-upload-message');
+  const submitButton = form.querySelector('button[type="submit"]');
+  const maxImageBytes = 4 * 1024 * 1024;
+  const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+  let previewUrl = null;
+  let preparedFile = null;
+  let photoSelection = 0;
+  let isPreparingPhoto = false;
+  let isSubmitting = false;
+
+  cameraAction.addEventListener('click', () => input.setAttribute('capture', 'environment'));
+  galleryAction.addEventListener('click', () => input.removeAttribute('capture'));
+
+  function setProgress(value) {
+    const percent = Math.max(0, Math.min(100, Math.round(value)));
+    progress.setAttribute('aria-valuenow', String(percent));
+    progressFill.style.width = `${percent}%`;
+    percentLabel.textContent = `${percent}%`;
+  }
+
+  async function optimizeLargePhoto(file) {
+    if (file.size <= maxImageBytes) return file;
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = sourceUrl;
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('无法在本机读取这张照片'));
+      });
+      let scale = Math.min(1, 1920 / Math.max(image.naturalWidth, image.naturalHeight));
+      let bestBlob = null;
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('浏览器不支持照片压缩');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        for (const quality of [0.84, 0.72, 0.60]) {
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+          if (!blob) continue;
+          if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+          if (blob.size <= maxImageBytes) {
+            const baseName = file.name.replace(/\.[^.]+$/, '') || 'wenchu-dish';
+            return new File([blob], `${baseName}.jpg`, {type: 'image/jpeg', lastModified: file.lastModified});
+          }
+        }
+        scale *= 0.78;
+      }
+      if (bestBlob) {
+        const baseName = file.name.replace(/\.[^.]+$/, '') || 'wenchu-dish';
+        return new File([bestBlob], `${baseName}.jpg`, {type: 'image/jpeg', lastModified: file.lastModified});
+      }
+      return file;
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+    }
+  }
+
+  function rejectPhoto(file, selection, reason) {
+    if (selection !== photoSelection) return;
+    input.value = '';
+    preparedFile = null;
+    isPreparingPhoto = false;
+    submitButton.disabled = false;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    preview.hidden = true;
+    zone.classList.remove('has-image');
+    uploadIcon.textContent = '!';
+    uploadTitle.textContent = '这张照片暂时不能用';
+    uploadHint.textContent = '可重拍，或从相册换一张';
+    feedback.classList.add('is-error');
+    const sizeMb = file ? (file.size / (1024 * 1024)).toFixed(2) : '';
+    message.textContent = reason || `照片仍有 ${sizeMb} MB，压缩后超过 4 MB 上限；请换一张尺寸较小的照片。`;
+    note.textContent = reason || '照片格式或大小暂不支持；尚未上传。';
+  }
+
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    const selection = ++photoSelection;
+    if (!file) {
+      preparedFile = null;
+      isPreparingPhoto = false;
+      submitButton.disabled = false;
+      return;
+    }
+    feedback.hidden = false;
+    feedback.classList.remove('is-working', 'is-error');
+    progressRow.hidden = true;
+    isPreparingPhoto = true;
+    submitButton.disabled = true;
+    message.textContent = file.size > maxImageBytes ? '正在本机优化照片；照片不会在这一步上传…' : '照片已选中，正在准备预览…';
+    let uploadFile = file;
+    try {
+      uploadFile = await optimizeLargePhoto(file);
+    } catch (_) {
+      uploadFile = file;
+    }
+    if (selection !== photoSelection) return;
+    if (uploadFile.size > maxImageBytes) {
+      rejectPhoto(uploadFile, selection);
+      return;
+    }
+    if (uploadFile.type && !supportedImageTypes.has(uploadFile.type)) {
+      rejectPhoto(uploadFile, selection, '目前支持 JPG、PNG、GIF 或 WebP；请换一种图片格式。');
+      return;
+    }
+    preparedFile = uploadFile;
+    isPreparingPhoto = false;
+    submitButton.disabled = false;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(uploadFile);
+    preview.src = previewUrl;
+    preview.hidden = false;
+    zone.classList.add('has-image');
+    uploadIcon.textContent = '✓';
+    uploadTitle.textContent = '照片已就绪';
+    uploadHint.textContent = uploadFile.size < file.size ? '照片已在本机优化；可重新拍摄或选择' : '可重新拍摄或从相册选择';
+    const sizeMb = (uploadFile.size / (1024 * 1024)).toFixed(2);
+    const compressed = uploadFile.size < file.size;
+    note.textContent = `已选择 ${file.name}${compressed ? `；已在本机优化为 ${sizeMb} MB` : `（${sizeMb} MB）`}。照片只在提交后才会上传；若选中本地已验证菜且没有补充要求，图片不会上传或保存。`;
+    message.textContent = `照片已准备好（${sizeMb} MB），尚未上传。提交后才开始上传。`;
+  });
+  form.addEventListener('submit', event => {
+    if (isPreparingPhoto) {
+      event.preventDefault();
+      message.textContent = '请等照片准备完成后再提交。';
+      return;
+    }
+    const hasName = document.getElementById('dish-name').value.trim().length > 0;
+    const hasPhoto = Boolean(preparedFile);
+    if (!hasName && !hasPhoto) {
+      event.preventDefault();
+      document.getElementById('dish-name').focus();
+      document.getElementById('dish-name').setCustomValidity('请先上传菜品照片或输入菜名。');
+      document.getElementById('dish-name').reportValidity();
+      document.getElementById('dish-name').addEventListener('input', () => document.getElementById('dish-name').setCustomValidity(''), {once: true});
+      return;
+    }
+    event.preventDefault();
+    if (isSubmitting) return;
+    isSubmitting = true;
+    submitButton.disabled = true;
+    feedback.hidden = false;
+    feedback.classList.remove('is-error');
+    feedback.classList.add('is-working');
+    progressRow.hidden = !hasPhoto;
+    setProgress(0);
+    message.textContent = hasPhoto ? '正在上传图片…0%' : '已提交菜名，正在查找历史方案或调用 DeepSeek…';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', form.action, true);
+    xhr.timeout = 120000;
+    xhr.upload.addEventListener('progress', uploadEvent => {
+      if (!uploadEvent.lengthComputable || !hasPhoto) return;
+      const percent = uploadEvent.loaded / uploadEvent.total * 100;
+      setProgress(percent);
+      message.textContent = percent >= 100 ? '图片上传完成，正在查找历史方案或生成方案…' : `正在上传图片…${Math.round(percent)}%`;
+    });
+    xhr.upload.addEventListener('load', () => {
+      if (!hasPhoto) return;
+      setProgress(100);
+      message.textContent = '图片上传完成，正在查找历史方案或生成方案…';
+    });
+    xhr.onload = () => {
+      const contentType = xhr.getResponseHeader('Content-Type') || '';
+      if (xhr.responseText && contentType.includes('text/html')) {
+        history.replaceState(null, '', '/dish-planner');
+        document.open();
+        document.write(xhr.responseText);
+        document.close();
+        return;
+      }
+      feedback.classList.remove('is-working');
+      feedback.classList.add('is-error');
+      message.textContent = `服务器返回异常状态（${xhr.status || '未知'}），暂时无法确认分析结果。请刷新页面后再查看。`;
+    };
+    xhr.onerror = () => {
+      feedback.classList.remove('is-working');
+      feedback.classList.add('is-error');
+      message.textContent = '网络中断，暂时无法确认图片是否上传成功。请先刷新页面查看，再决定是否重新提交。';
+    };
+    xhr.ontimeout = () => {
+      feedback.classList.remove('is-working');
+      feedback.classList.add('is-error');
+      message.textContent = '等待分析超时，结果状态暂时无法确认。请先刷新页面查看，再决定是否重新提交。';
+    };
+    xhr.onabort = () => {
+      feedback.classList.remove('is-working');
+      feedback.classList.add('is-error');
+      message.textContent = '本次上传已取消，未能确认分析结果。';
+    };
+    const formData = new FormData(form);
+    if (preparedFile) formData.set('dish_image', preparedFile, preparedFile.name || 'wenchu-dish.jpg');
+    xhr.send(formData);
+  });
+})();
+{% if analysis %}
+(() => {
+  const scrollToResult = () => {
+    const result = document.getElementById('plan');
+    if (!result) return;
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    result.scrollIntoView({behavior, block: 'start'});
+  };
+  if (document.readyState === 'complete') {
+    window.setTimeout(scrollToResult, 120);
+  } else {
+    window.addEventListener('load', () => window.setTimeout(scrollToResult, 120), {once: true});
+  }
+})();
+{% endif %}
+</script>
+</body>
+</html>

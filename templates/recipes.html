@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>找菜｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=competition-2">
+  {% include "_pwa_head.html" %}
+</head>
+<body class="screen-discover">
+{% include "_pwa_install.html" %}
+{% from "_recipe_media.html" import recipe_media %}
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a class="active" href="/recipes">找菜</a><a href="/profile">我的厨房</a></nav>
+    <a class="header-action" href="/profile">我的厨房 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="page-main">
+    <section class="discover-heading">
+      <div>
+        <div class="eyebrow"><span class="eyebrow-dot"></span> 让今天这顿饭，有个稳妥答案</div>
+        <h1>从手边的锅，<br><em>找到今天想吃的。</em></h1>
+        <p>按口味、时间和家里的厨具慢慢挑。每道菜都把关键步骤和安全提醒写清楚。</p>
+      </div>
+      <div class="discover-stamp"><span class="stamp-number">{{ recipes|length }}</span><span>道菜<br>适合现在逛逛</span><i>✳</i></div>
+    </section>
+
+    <section class="search-panel" aria-label="搜索和筛选">
+      <form class="search-form" action="/recipes" method="get">
+        <span class="search-symbol" aria-hidden="true">⌕</span>
+        <input type="search" name="q" value="{{ search_query }}" placeholder="搜一道想吃的菜，比如：蛋炒饭" aria-label="搜索菜名">
+        {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+        {% if selected_time %}<input type="hidden" name="time" value="{{ selected_time }}">{% endif %}
+        {% if compatible_only %}<input type="hidden" name="compatible" value="1">{% endif %}
+        {% if show_all %}<input type="hidden" name="show" value="all">{% endif %}
+        <button type="submit">搜索菜谱 <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="filter-group">
+        <span class="filter-label">菜式</span>
+        <div class="filter-chips">
+          <a class="filter-chip {% if not selected_category %}selected{% endif %}" href="{{ url_for('recipes', time=selected_time or None, q=search_query or None, compatible='1' if compatible_only else None, show='all' if show_all else None) }}">全部</a>
+          {% for item in categories %}
+          <a class="filter-chip {% if selected_category == item %}selected{% endif %}" href="{{ url_for('recipes', category=item, time=selected_time or None, q=search_query or None, compatible='1' if compatible_only else None, show='all' if show_all else None) }}">{{ item }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="filter-group filter-group-bottom">
+        <span class="filter-label">用时</span>
+        <div class="filter-chips">
+          {% for item in ['', '15分钟以内', '15到30分钟', '30分钟以上'] %}
+          <a class="filter-chip {% if selected_time == item %}selected{% endif %}" href="{{ url_for('recipes', category=selected_category or None, time=item or None, q=search_query or None, compatible='1' if compatible_only else None, show='all' if show_all else None) }}">{{ item or '不限时间' }}</a>
+          {% endfor %}
+        </div>
+        <span class="filter-spacer"></span>
+        {% if has_cookware_profile %}
+          <a class="cookware-toggle {% if compatible_only %}selected{% endif %}" href="{{ url_for('recipes', category=selected_category or None, time=selected_time or None, q=search_query or None, compatible=None if compatible_only else '1', show='all' if show_all else None) }}"><span class="toggle-mark">✓</span>只看我家能做</a>
+        {% else %}
+          <a class="cookware-toggle cookware-prompt" href="/profile"><span class="toggle-mark">＋</span>设置锅具后可匹配</a>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="results-section">
+      <div class="results-heading">
+        <div><span class="eyebrow eyebrow-small">{% if show_all %}稳厨菜谱库{% else %}适合日常的选择{% endif %}</span><h2>{% if compatible_only %}你家锅具能做{% elif selected_category %}{{ selected_category }}{% else %}慢慢挑，不着急{% endif %}</h2></div>
+        <div class="results-count"><strong>{{ recipes|length }}</strong><span>道菜</span>{% if not show_all %}<a href="/recipes?show=all">查看全部菜谱</a>{% else %}<a href="/recipes">只看日常菜</a>{% endif %}</div>
+      </div>
+      {% if recipes %}
+      <div class="recipe-grid discovery-grid">
+        {% for recipe in recipes %}
+        <article class="recipe-card discovery-card">
+          <a class="recipe-card-media" href="/recipe/{{ recipe['id'] }}" aria-label="查看{{ recipe['name'] }}">
+            {{ recipe_media(recipe) }}
+            <span class="media-category">{{ recipe['category'] or '家常菜' }}</span>
+            <span class="media-arrow" aria-hidden="true">↗</span>
+          </a>
+          <div class="recipe-card-content">
+            <div class="card-overline"><span>稳厨厨房 · {{ '%02d'|format(recipe['id']) }}</span><span>{% if recipe['time_minutes'] %}{{ recipe['time_minutes'] }} 分钟{% else %}时间随手艺{% endif %}</span></div>
+            <h3><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a></h3>
+            <p>{{ recipe['description'] }}</p>
+            <div class="card-bottom">
+              {% if has_cookware_profile %}
+                {% if recipe['missing_cookware'] %}<span class="match-badge match-warn">还差 {{ recipe['missing_cookware']|length }} 种锅</span>{% else %}<span class="match-badge">✓ 你家能做</span>{% endif %}
+              {% else %}<span class="match-badge match-neutral">可查看步骤</span>{% endif %}
+              <a href="/recipe/{{ recipe['id'] }}" class="card-open">看做法 <span>→</span></a>
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <span class="empty-symbol">⌕</span>
+        {% if compatible_only and not has_cookware_profile %}<h3>先告诉稳厨，你家有什么锅。</h3><p>选好锅具后，我们才能筛出真正适合你的菜。</p><a class="button button-primary" href="/profile">设置我的锅具 <span>→</span></a>
+        {% else %}<h3>这一轮还没找到合适的菜。</h3><p>试试换个关键词，或者清掉一两个筛选条件。</p><a class="button button-primary" href="/recipes">清除筛选 <span>→</span></a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </main>
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>每一步，都做得更安心。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a class="active" href="/recipes" aria-current="page"><span>⌕</span>找菜</a><a href="/profile"><span>◉</span>我的厨房</a></nav>
+</body>
+</html>

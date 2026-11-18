@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.DS_Store
+analysis_quota.sqlite3*
+dish_knowledge.sqlite3*
+knowledge_prototype.sqlite3*
+homepage-preview.png

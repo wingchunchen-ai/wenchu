@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>我的厨房｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=competition-2">
+  {% include "_pwa_head.html" %}
+</head>
+<body class="screen-profile">
+{% include "_pwa_install.html" %}
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a href="/recipes">找菜</a><a class="active" href="/profile">我的厨房</a></nav>
+    <a class="header-action" href="/recipes">去找一道菜 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="profile-main page-main">
+    <section class="profile-intro"><div class="eyebrow"><span class="eyebrow-dot"></span> 你的厨房画像</div><h1>从家里已有的锅开始，<br><em>让选菜简单一点。</em></h1><p>选几件你手边常用的厨具。稳厨会用它们帮你筛菜，不用为了做一道菜先去买一整套装备。</p></section>
+    {% if user and not edit %}
+      <section class="profile-card profile-summary-card">
+        <div class="profile-avatar">{{ user['avatar'] or '🍳' }}</div>
+        <div class="profile-summary-content"><span class="eyebrow eyebrow-small">欢迎回来</span><h2>{{ user['nickname'] }}</h2><p>这是稳厨目前为你记下的厨房装备。</p>
+          <div class="cookware-tags cookware-tags-light">{% for item in user['cookware'].split(',') if user['cookware'] %}<span>{{ item }}</span>{% else %}<span>还没有选择锅具</span>{% endfor %}</div>
+          <div class="profile-actions"><a class="button button-primary" href="/recipes?compatible=1">查看适合我的菜 <span>→</span></a><a class="button button-quiet" href="/profile?edit=1">修改厨房资料</a></div>
+        </div>
+      </section>
+    {% else %}
+      {% set user_cookware = user['cookware'].split(',') if user and user['cookware'] else [] %}
+      <form class="profile-form" action="/profile" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <section class="profile-card identity-card">
+          <div class="profile-card-heading"><span class="form-step">01</span><div><h2>先认识一下你</h2><p>取个昵称就好，方便稳厨记住你的厨房。</p></div></div>
+          <label class="field-label" for="nickname">你的昵称</label>
+          <input class="text-field" id="nickname" type="text" name="nickname" value="{{ user['nickname'] if user else '' }}" placeholder="比如：小陈的厨房" required maxlength="30">
+          <span class="field-hint">资料保存在当前浏览器，不需要注册；请勿填写敏感信息。</span>
+          <div class="avatar-picker"><span class="field-label">选一个小头像</span><div class="avatar-options">
+            {% for emoji in ['🍳','👨‍🍳','👩‍🍳','🐱','🐶','🦊','🐼','🎃'] %}<label><input type="radio" name="avatar" value="{{ emoji }}" {% if user and user['avatar'] == emoji %}checked{% elif not user and emoji == '🍳' %}checked{% endif %}><span>{{ emoji }}</span></label>{% endfor %}
+          </div></div>
+        </section>
+
+        <section class="profile-card cookware-card">
+          <div class="profile-card-heading"><span class="form-step">02</span><div><h2>家里有哪些锅具？</h2><p>可以多选，不必选得很精确；稳厨只用来帮你初步匹配菜谱。</p></div></div>
+          <div class="cookware-grid">
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="炒锅" {% if '炒锅' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/chaoguo.png" alt=""></span><span class="cookware-option-copy"><strong>炒锅</strong><small>快炒、煎炒</small></span><span class="option-check">✓</span></label>
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="电饭煲" {% if '电饭煲' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/dianfanbao.png" alt=""></span><span class="cookware-option-copy"><strong>电饭煲</strong><small>焖饭、煮饭</small></span><span class="option-check">✓</span></label>
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="微波炉" {% if '微波炉' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/weipolu.png" alt=""></span><span class="cookware-option-copy"><strong>微波炉</strong><small>加热、快手料理</small></span><span class="option-check">✓</span></label>
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="空气炸锅" {% if '空气炸锅' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/kongqizhaguo.png" alt=""></span><span class="cookware-option-copy"><strong>空气炸锅</strong><small>烘烤、少油料理</small></span><span class="option-check">✓</span></label>
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="蒸锅" {% if '蒸锅' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/zhengguo.png" alt=""></span><span class="cookware-option-copy"><strong>蒸锅</strong><small>蒸制、加热</small></span><span class="option-check">✓</span></label>
+            <label class="cookware-option"><input type="checkbox" name="cookware" value="平底锅" {% if '平底锅' in user_cookware %}checked{% endif %}><span class="cookware-option-image"><img src="/static/cookware/pingdiguo.png" alt=""></span><span class="cookware-option-copy"><strong>平底锅</strong><small>煎、焖、一锅出</small></span><span class="option-check">✓</span></label>
+          </div>
+        </section>
+        <div class="profile-submit-row"><a class="button button-quiet" href="/">先回首页</a><button class="button button-primary" type="submit">保存我的厨房 <span>→</span></button></div>
+      </form>
+    {% endif %}
+  </main>
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>厨房资料保存在当前浏览器，清除浏览器数据会丢失。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a href="/recipes"><span>⌕</span>找菜</a><a class="active" href="/profile" aria-current="page"><span>◉</span>我的厨房</a></nav>
+</body>
+</html>

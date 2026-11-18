@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>为你推荐</title>
+</head>
+<body>
+    <h1>为你推荐</h1>
+    <p>你有的锅具：{{ ','.join(user_cookware) }}</p>
+    <h2>能做的</h2>
+    <ul>
+        {% for recipe in can_make %}
+        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a></li>
+        {% endfor %}
+    </ul>
+    <h2>缺锅具</h2>
+    <ul>
+        {% for recipe, missing in cannot_make %}
+        <li>{{ recipe['name'] }}（缺：{{ ','.join(missing) }}）</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

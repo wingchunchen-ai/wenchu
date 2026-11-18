@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "稳厨｜按家里的锅做菜",
+  "short_name": "稳厨",
+  "description": "从你想做的菜开始，稳妥地做一顿饭。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f3ed",
+  "theme_color": "#f4f3ed",
+  "icons": [
+    {
+      "src": "/static/icons/wenchu-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/wenchu-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

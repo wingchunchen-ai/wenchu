@@ -1,0 +1,23 @@
+{% macro recipe_media(recipe, modifier='') -%}
+<div class="recipe-art {{ modifier }}">
+  {% if recipe['image'] %}
+  <img src="{{ recipe['image'] }}" alt="{{ recipe['name'] }}" loading="lazy">
+  {% elif recipe['id']|int == 1 %}
+  <img src="/static/food/web/hero-cola-wings.jpg" alt="可乐鸡翅" loading="lazy">
+  {% elif recipe['id']|int == 12 %}
+  <img src="/static/food/web/fried-rice.jpg" alt="蛋炒饭" loading="lazy">
+  {% elif recipe['id']|int == 11 %}
+  <img src="/static/food/web/mushroom-pasta.jpg" alt="奶油蘑菇意面" loading="lazy">
+  {% else %}
+  <div class="recipe-art-fallback fallback-{{ recipe['id']|int % 6 }}">
+    <span class="fallback-orbit"></span>
+    <span class="fallback-index">{{ '%02d'|format(recipe['id']|int) }}</span>
+    <div class="fallback-copy">
+      <span>{{ recipe['category'] or '稳厨家常' }}</span>
+      <strong>{{ recipe['name'] }}</strong>
+      <small>把一顿饭，做得稳稳当当</small>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}

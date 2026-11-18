@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ed">
+  <title>配齐这一顿｜稳厨</title>
+  <link rel="stylesheet" href="/static/style.css?v=shopping-demo-2">
+</head>
+<body class="screen-shopping">
+<div class="app-shell">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="稳厨首页"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a href="/">首页</a><a href="/recipes">找菜</a><a class="active" href="/shopping">配齐这一顿</a><a href="/profile">我的厨房</a></nav>
+    <a class="header-action" href="/recipes">继续找菜 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main class="shopping-main" data-recipe-id="{{ recipe['id'] }}">
+    <div class="breadcrumbs"><a href="/">首页</a><span>/</span><span>新手配齐</span></div>
+    <section class="shopping-intro">
+      <div class="shopping-intro-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> 不用先买齐一整个厨房</div>
+        <h1>先选一道菜，<br><em>只补这顿饭缺的。</em></h1>
+        <p>稳厨先把菜谱里的食材和必要厨具列清楚。家里已经有的，点一下就从待买清单里去掉。</p>
+      </div>
+      <div class="shopping-stamp"><span>轻装</span><strong>开做</strong><i>✳</i></div>
+    </section>
+
+    <section class="recipe-picker-panel">
+      <div class="picker-step"><span>01</span><div><strong>这次想做什么？</strong><small>选一道菜，清单会跟着变</small></div></div>
+      <form class="recipe-picker" action="/shopping" method="get">
+        <label class="visually-hidden" for="recipe-choice">选择菜谱</label>
+        <select id="recipe-choice" name="recipe_id">
+          {% for item in recipes %}<option value="{{ item['id'] }}" {% if item['id'] == recipe['id'] %}selected{% endif %}>{{ item['name'] }}{% if item['time_minutes'] %} · 约 {{ item['time_minutes'] }} 分钟{% endif %}</option>{% endfor %}
+        </select>
+        <button class="button button-primary" type="submit">生成我的清单 <span>→</span></button>
+      </form>
+      <p class="picker-caption">当前示例：<strong>{{ recipe['name'] }}</strong>{% if recipe['description'] %} · {{ recipe['description'] }}{% endif %}</p>
+    </section>
+
+    <div class="shopping-layout">
+      <div class="shopping-lists">
+        <section class="shopping-card">
+          <div class="shopping-card-heading"><span class="shopping-number">02</span><div><span class="eyebrow eyebrow-small">菜谱原始用料</span><h2>食材清单</h2></div><span class="shopping-counter" id="ingredient-counter">{{ ingredients|length }} 项待确认</span></div>
+          {% if ingredients %}
+          <div class="shopping-check-list" data-list="ingredients">
+            {% for item in ingredients %}<button class="shopping-check-row" type="button" data-kind="ingredient" data-index="{{ loop.index0 }}" aria-pressed="false"><span class="shopping-checkmark">✓</span><span class="shopping-item-name">{{ item }}</span><span class="shopping-row-state">我有了</span></button>{% endfor %}
+          </div>
+          <p class="shopping-note">清单沿用菜谱原文，份量请按实际用餐人数调整。</p>
+          {% else %}<p class="shopping-note">这道菜暂时没有单独列出食材清单。</p>{% endif %}
+        </section>
+
+        <section class="shopping-card cookware-shopping-card">
+          <div class="shopping-card-heading"><span class="shopping-number">03</span><div><span class="eyebrow eyebrow-small">仅列出做这道菜所需</span><h2>必要厨具</h2></div><span class="shopping-counter" id="cookware-counter">{{ cookware_items|length }} 项待确认</span></div>
+          {% if cookware_items %}
+          <div class="cookware-shopping-list">
+            {% for item in cookware_items %}
+            <button class="shopping-check-row cookware-check-row {% if item['has_it'] %}is-done{% endif %}" type="button" data-kind="cookware" data-index="{{ loop.index0 }}" aria-pressed="{{ 'true' if item['has_it'] else 'false' }}">
+              <span class="shopping-checkmark">✓</span><span class="shopping-item-copy"><strong>{{ item['name'] }}</strong><small>{{ item['note'] }}</small></span><span class="shopping-row-state">{% if item['has_it'] %}家里有{% else %}我有了{% endif %}</span>
+            </button>
+            {% endfor %}
+          </div>
+          {% else %}<div class="no-cookware-needed"><span>✓</span><p>菜谱没有指定必须购买的锅具。先看步骤里的小工具，家里有的就能用。</p></div>{% endif %}
+          <p class="shopping-note">这是按菜谱文字做的初步匹配，家里相近的锅也可能可以替代，不必为单道菜重复购买。</p>
+        </section>
+      </div>
+
+      <aside class="shopping-sidebar">
+        <section class="shopping-summary-card">
+          <div class="summary-card-top"><span class="eyebrow eyebrow-light"><span class="eyebrow-dot"></span> 一顿饭的配套清单</span><span class="summary-recipe-time">{% if recipe['time_minutes'] %}约 {{ recipe['time_minutes'] }} 分钟{% else %}家常菜{% endif %}</span></div>
+          <h2>{{ recipe['name'] }}</h2>
+          <p>先用手边已有的东西。清单里没勾选的项目，才会放进“待补齐”。</p>
+          <div class="summary-totals"><div><strong id="total-ingredient-count">{{ ingredients|length }}</strong><small>项食材</small></div><i></i><div><strong id="total-cookware-count">{{ cookware_items|length }}</strong><small>件厨具</small></div></div>
+          <button class="partner-demo-button partner-grocery" type="button" data-channel="买菜渠道"><span class="partner-icon">菜</span><span><strong>整理买菜清单</strong><small>带着待买食材去选购</small></span><span class="partner-arrow">↗</span></button>
+          <button class="partner-demo-button partner-cookware" type="button" data-channel="厨具渠道"><span class="partner-icon">锅</span><span><strong>看看缺哪件厨具</strong><small>只推荐这道菜用得上的</small></span><span class="partner-arrow">↗</span></button>
+          <div class="partner-disclosure"><strong>路演说明</strong><span>下方平台与店铺均为合作设想示例，尚未签约或接入；不展示价格，也不会真实下单。</span></div>
+        </section>
+        <section class="partner-showcase">
+          <div class="partner-showcase-heading"><span class="eyebrow eyebrow-small">从菜谱清单到商品入口</span><h2>可合作的电商渠道</h2><p>先从清单导购试点，后续可拓展品牌联名与主题活动。</p></div>
+          <article class="merchant-card">
+            <div class="merchant-card-top"><span class="merchant-platform platform-jd">京东</span><span class="merchant-demo-tag">合作设想</span></div>
+            <h3>厨具品牌店 <small>示例店铺</small></h3>
+            <p>根据菜谱缺口，匹配炒锅、蒸锅等适用厨具。</p>
+            <button class="merchant-demo-button" type="button" data-merchant="京东 · 厨具品牌店（示例）" data-kind="cookware">看本菜适配清单 <span>→</span></button>
+          </article>
+          <article class="merchant-card">
+            <div class="merchant-card-top"><span class="merchant-platform platform-taobao">淘宝</span><span class="merchant-demo-tag">合作设想</span></div>
+            <h3>家常食材小店 <small>示例店铺</small></h3>
+            <p>把一道菜待补齐的食材，整理成可选购清单。</p>
+            <button class="merchant-demo-button" type="button" data-merchant="淘宝 · 家常食材小店（示例）" data-kind="ingredient">看本菜适配清单 <span>→</span></button>
+          </article>
+          <article class="merchant-card">
+            <div class="merchant-card-top"><span class="merchant-platform platform-taobao">淘宝</span><span class="merchant-demo-tag">合作设想</span></div>
+            <h3>新手厨房用品店 <small>示例店铺</small></h3>
+            <p>围绕新手常做菜，推荐基础厨具与实用小工具。</p>
+            <button class="merchant-demo-button" type="button" data-merchant="淘宝 · 新手厨房用品店（示例）" data-kind="cookware">看本菜适配清单 <span>→</span></button>
+          </article>
+          <p class="partner-showcase-footnote">店铺名称为演示用虚拟示例，并非真实商家或已达成合作；正式合作后可替换为商家主页、商品链接或联盟导购链接。</p>
+        </section>
+        <section class="shopping-tip-card"><span class="tip-spark">✳</span><div><strong>新手小建议</strong><p>先挑一口能做多种菜的锅，再根据第一周实际做过的菜添置工具。别为了“可能用到”一次买一套。</p></div></section>
+        <a class="shopping-back-link" href="/recipe/{{ recipe['id'] }}">回到 {{ recipe['name'] }} 的步骤 <span>→</span></a>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer"><a class="brand brand-small" href="/"><span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 24.5c0-6.2 4.2-10.8 9.7-10.8 5.3 0 8.3 4.1 8.3 9.2 0 6.3-4.8 10.4-10 10.4-4.5 0-8-3.3-8-8.8Z"/><path d="M19.5 13.4c-.1-4 1.8-6.1 5.5-7.2M13.2 24.1c3.3.4 6.1 2.3 8.2 5.7"/></svg></span><span class="brand-word"><strong>稳厨</strong><small>COOK WITH CONFIDENCE</small></span></a><span>先做一顿，再慢慢配齐厨房。</span></footer>
+</div>
+<nav class="mobile-dock" aria-label="底部导航"><a href="/"><span>⌂</span>首页</a><a class="active" href="/recipes" aria-current="page"><span>⌕</span>找菜</a><a href="/profile"><span>◉</span>我的厨房</a></nav>
+
+<dialog class="partner-demo-dialog" id="partner-dialog" aria-labelledby="partner-dialog-title">
+  <button class="dialog-close" type="button" aria-label="关闭">×</button>
+  <div class="eyebrow"><span class="eyebrow-dot"></span> 配套清单已整理</div>
+  <h2 id="partner-dialog-title">准备带去选购</h2>
+  <p class="dialog-channel" id="dialog-channel"></p>
+  <ul id="dialog-items"></ul>
+  <div class="dialog-disclosure">当前只是概念演示，尚未接入真实商家，也不会跳转、提交订单或产生费用。</div>
+  <button class="button button-primary dialog-done" type="button">知道了</button>
+</dialog>
+<script>
+(() => {
+  const root = document.querySelector('[data-recipe-id]');
+  const recipeId = root.dataset.recipeId;
+  const rows = [...document.querySelectorAll('.shopping-check-row')];
+  const key = `wenchu-shopping-list-${recipeId}`;
+  const initial = Object.fromEntries(rows.map(row => [`${row.dataset.kind}-${row.dataset.index}`, row.classList.contains('is-done')]));
+  let state = {...initial};
+  try { state = {...state, ...JSON.parse(localStorage.getItem(key) || '{}')}; } catch (_) {}
+  const labels = {ingredient: 'ingredient-counter', cookware: 'cookware-counter'};
+  const totals = {ingredient: 'total-ingredient-count', cookware: 'total-cookware-count'};
+  function render() {
+    rows.forEach(row => {
+      const id = `${row.dataset.kind}-${row.dataset.index}`;
+      const done = Boolean(state[id]);
+      row.classList.toggle('is-done', done);
+      row.setAttribute('aria-pressed', String(done));
+      const stateLabel = row.querySelector('.shopping-row-state');
+      if (stateLabel) stateLabel.textContent = done ? (row.dataset.kind === 'cookware' ? '家里有' : '已备好') : '我有了';
+    });
+    for (const kind of ['ingredient', 'cookware']) {
+      const group = rows.filter(row => row.dataset.kind === kind);
+      const waiting = group.filter(row => !state[`${kind}-${row.dataset.index}`]).length;
+      const counter = document.getElementById(labels[kind]);
+      if (counter) counter.textContent = `${waiting} 项待补齐`;
+      const total = document.getElementById(totals[kind]);
+      if (total) total.textContent = waiting;
+    }
+    localStorage.setItem(key, JSON.stringify(state));
+  }
+  rows.forEach(row => row.addEventListener('click', () => {
+    const id = `${row.dataset.kind}-${row.dataset.index}`;
+    state[id] = !state[id];
+    render();
+  }));
+  const dialog = document.getElementById('partner-dialog');
+  document.querySelectorAll('.partner-demo-button').forEach(button => button.addEventListener('click', () => {
+    document.getElementById('partner-dialog-title').textContent = '准备带去选购';
+    document.getElementById('dialog-channel').textContent = `${button.dataset.channel} · ${root.querySelector('.shopping-summary-card h2').textContent}`;
+    const waiting = rows.filter(row => !state[`${row.dataset.kind}-${row.dataset.index}`] && (button.dataset.channel === '买菜渠道' ? row.dataset.kind === 'ingredient' : row.dataset.kind === 'cookware'));
+    const list = document.getElementById('dialog-items');
+    list.replaceChildren();
+    if (waiting.length) waiting.forEach(row => {
+      const li = document.createElement('li');
+      li.textContent = row.querySelector('.shopping-item-name, .shopping-item-copy strong').textContent;
+      list.appendChild(li);
+    });
+    else {
+      const li = document.createElement('li');
+      li.textContent = button.dataset.channel === '买菜渠道' ? '食材都已标记为备好' : '这道菜的厨具都已标记为家里有';
+      list.appendChild(li);
+    }
+    dialog.showModal();
+  }));
+  document.querySelectorAll('.merchant-demo-button').forEach(button => button.addEventListener('click', () => {
+    document.getElementById('partner-dialog-title').textContent = '合作场景示意';
+    document.getElementById('dialog-channel').textContent = `${button.dataset.merchant} · ${root.querySelector('.shopping-summary-card h2').textContent}`;
+    const kind = button.dataset.kind;
+    const waiting = rows.filter(row => !state[`${row.dataset.kind}-${row.dataset.index}`] && row.dataset.kind === kind);
+    const list = document.getElementById('dialog-items');
+    list.replaceChildren();
+    if (waiting.length) waiting.forEach(row => {
+      const li = document.createElement('li');
+      li.textContent = row.querySelector('.shopping-item-name, .shopping-item-copy strong').textContent;
+      list.appendChild(li);
+    });
+    else {
+      const li = document.createElement('li');
+      li.textContent = kind === 'ingredient' ? '食材都已标记为备好' : '这道菜的厨具都已标记为家里有';
+      list.appendChild(li);
+    }
+    dialog.showModal();
+  }));
+  dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
+  dialog.querySelector('.dialog-done').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+  render();
+})();
+</script>
+</body>
+</html>
