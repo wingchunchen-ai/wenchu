@@ -30,3 +30,9 @@ python tests/test_main_path.py
 - Build Command：`pip install -r requirements.txt`
 - Start Command：`gunicorn app:app`
 - 环境变量：`SECRET_KEY`
+
+## 导购演示（商业模式）
+
+- 商品数据在 `shop_items.json`：现在全部是示例商品，链接是各平台公开搜索页。换成真实联盟推广链接时，只改这个文件里的 `url`、`price`、`is_sample`。
+- 页面：菜谱详情里的「做这道菜的锅」「一键备齐食材」、`/starter` 入门备厨、`/stats` 导购点击统计。
+- 现成 12 道菜的菜品图在 `static/dishes/`，由 AI（即梦）生成；`菜品图-写入数据库.sql` 可以把图片路径写进别的数据库。
