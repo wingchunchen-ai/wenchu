@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+{% include '_head.html' %}
+  <title>导购点击统计 - 稳厨</title>
+</head>
+<body>
+<div class="page">
+  <h1>📊 导购点击统计</h1>
+  <p class="sample-note">⚠️ 这是本机记录的演示数据，只统计「点了购买按钮」的次数，不代表真实成交。商品都是示例商品；真实返佣要以联盟后台的成交数据为准。</p>
+  <div class="stat-grid">
+    <div class="stat"><div class="num">{{ views }}</div><div>菜谱详情浏览</div></div>
+    <div class="stat"><div class="num">{{ detail_clicks }}</div><div>详情页购买点击</div></div>
+    <div class="stat"><div class="num">{% if rate is not none %}{{ rate }}%{% else %}—{% endif %}</div><div>点击率（点击 ÷ 浏览）</div></div>
+    <div class="stat"><div class="num">{{ total }}</div><div>全部购买点击</div></div>
+  </div>
+  <h2>按平台</h2>
+  {% if by_platform %}<ul>{% for r in by_platform %}<li>{{ catalog.platforms.get(r['platform'], {}).get('name', r['platform']) }}：{{ r['n'] }} 次</li>{% endfor %}</ul>{% else %}<p>还没有点击。</p>{% endif %}
+  <h2>按入口</h2>
+  {% if by_source %}<ul>{% for r in by_source %}<li>{{ sources.get(r['source'], r['source']) }}：{{ r['n'] }} 次</li>{% endfor %}</ul>{% else %}<p>还没有点击。</p>{% endif %}
+  <h2>点得最多的商品</h2>
+  {% if top_items %}
+  <ol>{% for r in top_items %}<li>{% if r['kind'] == 'ingredient' %}食材{% elif r['kind'] == 'tool' %}小工具{% else %}锅具{% endif %} · {{ r['item_key'] }}：{{ r['n'] }} 次</li>{% endfor %}</ol>
+  {% else %}<p>还没有点击。</p>{% endif %}
+  <h2>按菜谱</h2>
+  <table class="shop-table">
+    <tr><th>菜谱</th><th>浏览</th><th>购买点击</th></tr>
+    {% for r in top_recipes %}<tr><td><a href="/recipe/{{ r['id'] }}">{{ r['name'] }}</a></td><td>{{ r['views'] }}</td><td>{{ r['clicks'] }}</td></tr>{% endfor %}
+  </table>
+  <h2>最近 10 次点击</h2>
+  {% if recent %}
+  <ul>{% for r in recent %}<li>{{ r['created_at'] }} · {{ sources.get(r['source'], r['source']) }} · {{ r['item_key'] }} · {{ catalog.platforms.get(r['platform'], {}).get('name', r['platform']) }}</li>{% endfor %}</ul>
+  {% else %}<p>还没有点击。</p>{% endif %}
+  <p><a href="/starter">去入门备厨</a> · <a href="/all">回到全部菜谱</a></p>
+</div>
+{% include '_nav.html' %}
+</body>
+</html>

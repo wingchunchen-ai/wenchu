@@ -234,7 +234,69 @@ try:
     finally:
         wenchu.DB_PATH = saved_path
 
-    print('12. 收尾')
+    print('12. 导购演示：缺的锅 / 一键备齐食材 / 入门备厨 / 点击统计')
+    import json
+    import shop as shopmod
+    cfg = json.load(open(os.path.join(ROOT, 'shop_items.json'), encoding='utf-8'))
+    allowed = tuple(p['search_url'].split('{kw}')[0] for p in cfg['platforms'].values())
+    offers = [o for group in ('cookware', 'tools') for it in cfg[group].values() for o in it['offers']]
+    check('六种锅都有推荐款', all(p in cfg['cookware'] for p in shopmod.POTS))
+    check('每个商品都有平台、链接、参考价、是否示例',
+          all(o['platform'] in cfg['platforms'] and o['url'] and o['price'] > 0 and 'is_sample' in o for o in offers))
+    check('现在全部标成示例商品', all(o['is_sample'] for o in offers) and all(e['is_sample'] for e in cfg['ingredients']))
+    check('链接都是平台公开搜索页（没有编造商品页）', all(o['url'].startswith(allowed) for o in offers))
+    anon = app.test_client()
+    r = anon.get('/recipe/5')
+    h = text(r)
+    check('未填画像：详情不拦人，只提示填锅具', r.status_code == 200 and '填一下家里的锅具，就能看到缺什么' in h and '还缺' not in h)
+    check('未填画像也能看采购清单', '一键备齐食材' in h and '示例商品、价格仅供参考' in h)
+    shopper = app.test_client()
+    shopper.post('/profile', data={'nickname': '只有炒锅', 'cookware': ['炒锅']})
+    h = text(shopper.get('/recipe/5'))
+    check('缺空气炸锅：显示还缺 + 推荐款 + 示例标记',
+          '还缺：空气炸锅' in h and '可视窗空气炸锅' in h and '示例商品' in h and '为什么适合小白' in h and '/go?kind=cookware' in h)
+    h = text(shopper.get('/recipe/4'))
+    check('锅都有：显示你家已有、可以直接开做', '你家已有：炒锅' in h and '都有' in h and '还缺' not in h)
+    h = text(shopper.get('/recipe/1'))
+    check('括号里的「蒸锅拿掉蒸笼」不算要蒸锅', '还缺：平底锅' in h and '还缺：平底锅、蒸锅' not in h)
+    h = text(shopper.get('/recipe/12'))
+    rows = re.findall(r'class="shop-row( done)?" data-price="(\d+)" data-name="([^"]+)"', h)
+    names = [n for _, _, n in rows]
+    check('采购清单列出蛋炒饭的 4 样食材', len(rows) == 4 and '鸡蛋' in names and '生抽' in names, names)
+    check('调味料默认勾上「家里已有」', any(d and n == '生抽' for d, _, n in rows) and any(not d and n == '鸡蛋' for d, _, n in rows))
+    check('有估算总价和去买按钮', '估算' in h and 'kind=ingredient' in h and '复制采购清单' in h)
+    r = shopper.get('/go?kind=cookware&key=空气炸锅&platform=jd&from=detail&recipe=5')
+    check('购买按钮跳到京东搜索页', r.status_code == 302 and r.headers['Location'].startswith('https://search.jd.com/Search?keyword='))
+    r = shopper.get('/go?kind=ingredient&key=鸡蛋&platform=pdd&from=list&recipe=12')
+    check('食材去买跳到拼多多搜索页', r.status_code == 302 and r.headers['Location'].startswith('https://mobile.yangkeduo.com/search_result.html?search_key='))
+    r = shopper.get('/go?kind=tool&key=锅铲&platform=taobao&from=tool&recipe=4')
+    check('小工具跳到淘宝搜索页', r.status_code == 302 and r.headers['Location'].startswith('https://s.taobao.com/search?q='))
+    check('不存在的商品 404', shopper.get('/go?kind=cookware&key=不存在&platform=jd&from=detail').status_code == 404)
+    check('乱填平台 / 入口 400', shopper.get('/go?kind=cookware&key=炒锅&platform=evil&from=detail').status_code == 400
+          and shopper.get('/go?kind=cookware&key=炒锅&platform=jd&from=evil').status_code == 400)
+    r = shopper.get('/go?kind=cookware&key=炒锅&platform=jd&from=detail&url=https://evil.example')
+    check('不能借跳转去别的网站', r.status_code == 302 and 'evil' not in r.headers['Location'])
+    r = shopper.get('/starter')
+    h = text(r)
+    # 前面测试上传了一道用平底锅的菜，所以按库里实际菜数来判断
+    m = re.search(r'补一口(\S+?)：多做 (\d+) 道', h)
+    check('入门备厨：补平底锅解锁最多且排第一', r.status_code == 200 and m and m.group(1) == '平底锅' and int(m.group(2)) >= 5
+          and h.find('补一口平底锅') < h.find('补一口空气炸锅'), m and m.groups())
+    m = re.search(r'只买这三件：<strong>([^<]+)</strong>，就能做稳厨里 <strong>(\d+)</strong> / (\d+) 道', h)
+    check('入门三件套（炒锅、平底锅、空气炸锅）能做全部菜', m and set(m.group(1).split('、')) == {'炒锅', '平底锅', '空气炸锅'} and m.group(2) == m.group(3), m and m.groups())
+    m = re.search(r'没有炒锅也能做的菜（(\d+) 道）', h)
+    check('没有炒锅也能做至少 7 道', m and int(m.group(1)) >= 7, m and m.groups())
+    check('入门备厨未填画像也能看', anon.get('/starter').status_code == 200 and '还没填锅具' in text(anon.get('/starter')))
+    check('画像页和推荐页有入门备厨入口', '/starter' in text(shopper.get('/profile')) and '/starter' in text(shopper.get('/recommend')))
+    r = shopper.get('/stats')
+    h = text(r)
+    check('统计页显示点击次数和点击率', r.status_code == 200 and '全部购买点击' in h and '点击率' in h and '演示数据' in h)
+    con = sqlite3.connect(TEST_DB)
+    check('点击记进库（4 次有效点击）', con.execute('SELECT COUNT(*) FROM shop_clicks').fetchone()[0] == 4)
+    check('详情浏览也记进库', con.execute('SELECT COUNT(*) FROM recipe_views').fetchone()[0] > 0)
+    con.close()
+
+    print('13. 收尾')
     check('交付库一个字节都没变', hashlib.md5(open(REAL_DB, 'rb').read()).hexdigest() == real_db_hash)
 finally:
     shutil.rmtree(TMP, ignore_errors=True)

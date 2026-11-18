@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+{% include '_head.html' %}
+  <title>入门备厨 - 稳厨</title>
+</head>
+{% import '_shop.html' as shopui %}
+<body>
+<div class="page">
+  <h1>🧰 入门备厨</h1>
+  <p class="hint">家里锅不全也没关系。下面是按稳厨现有的 {{ total }} 道菜算出来的：先补哪件，能多做最多的菜。</p>
+  {{ shopui.disclaimer(catalog) }}
+
+  <h2>补哪件能解锁最多菜</h2>
+  {% if mine %}
+  <p>你家已有：{{ '、'.join(mine) }}，现在能做 <strong>{{ can_now|length }}</strong> / {{ total }} 道。（<a href="/profile?edit=1">改锅具</a>）</p>
+  {% else %}
+  <p class="hint">还没填锅具，下面按「家里一口锅都没有」来算。<a href="/profile?edit=1">填一下锅具</a>，结果会更准。</p>
+  {% endif %}
+  {% set useful = ranking|selectattr(1)|list %}
+  {% if useful %}
+  <ol class="unlock">
+    {% for pot, unlocked in useful %}
+    <li>
+      <h3>补一口{{ pot }}：多做 {{ unlocked|length }} 道</h3>
+      <p class="meta">解锁：{% for r in unlocked %}<a href="/recipe/{{ r['id'] }}">{{ r['name'] }}</a>{% if not loop.last %}、{% endif %}{% endfor %}</p>
+      {% if loop.first and catalog.cookware.get(pot) %}
+      <p class="best">⭐ 最划算的一件</p>
+      {% endif %}
+      {% if catalog.cookware.get(pot) %}{{ shopui.product_card(pot, catalog.cookware[pot], 'cookware', 'starter', None, catalog) }}{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p>👍 稳厨现在的菜你家的锅都能做了，暂时不用再买。</p>
+  {% endif %}
+  {% set unused = ranking|rejectattr(1)|map(attribute=0)|list %}
+  {% if unused %}<p class="hint">{{ '、'.join(unused) }}：稳厨现在的菜还用不到，先不用买。</p>{% endif %}
+
+  <h2>入门三件套</h2>
+  <p>只买这三件：<strong>{{ '、'.join(kit) }}</strong>，就能做稳厨里 <strong>{{ kit_covered|length }}</strong> / {{ total }} 道菜。</p>
+  <details>
+    <summary>看三件套的示例款</summary>
+    {% for pot in kit %}{% if catalog.cookware.get(pot) %}{{ shopui.product_card(pot, catalog.cookware[pot], 'cookware', 'starter', None, catalog) }}{% endif %}{% endfor %}
+  </details>
+
+  <h2>没有炒锅也能做的菜（{{ no_wok|length }} 道）</h2>
+  <ul>
+    {% for r in no_wok %}<li><a href="/recipe/{{ r['id'] }}">{{ r['name'] }}</a></li>{% endfor %}
+  </ul>
+</div>
+{% include '_nav.html' %}
+</body>
+</html>

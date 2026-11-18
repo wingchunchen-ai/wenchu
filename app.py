@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, session, redirect, flash, sen
 import os#拼路径、读环境变量
 import uuid#给上传的图片起一个不会重名的文件名
 import sqlite3#引入sql数据库
+import shop#导购：缺的锅、采购清单、入门备厨（商品数据在 shop_items.json）
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +68,24 @@ def init_db():
             vote TEXT NOT NULL CHECK (vote IN ('like', 'dislike')),
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (recipe_id, user_id)
+        )''')
+        # shop_clicks 表：记录导购按钮点了多少次（本机演示用的「转化数据」）
+        conn.execute('''CREATE TABLE IF NOT EXISTS shop_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            item_key TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            source TEXT NOT NULL,
+            recipe_id INTEGER,
+            user_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )''')
+        # recipe_views 表：记录详情页被看了多少次，用来算「看了菜谱的人里有多少点了购买」
+        conn.execute('''CREATE TABLE IF NOT EXISTS recipe_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_id INTEGER NOT NULL,
+            user_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )''')
         # 提交建表
         conn.commit()
@@ -182,11 +201,28 @@ def recipe_detail(recipe_id):
             FROM questions q LEFT JOIN users u ON q.user_id = u.id
             WHERE q.recipe_id = ? ORDER BY q.id DESC''', (recipe_id,)).fetchall()
         stats = vote_stats(conn).get(recipe_id, {'likes': 0, 'total': 0, 'rate': None})
+        if recipe is not None:  # 记一次浏览，统计页用来算点击率
+            conn.execute('INSERT INTO recipe_views (recipe_id, user_id) VALUES (?, ?)', (recipe_id, session.get('user_id')))
+            conn.commit()
     finally:
         conn.close()
     if recipe is None:
         return render_template('error.html', message='这道菜不存在，可能已经被删掉了。'), 404
-    return render_template('recipe_detail.html', recipe=recipe, steps=steps, questions=questions, stats=stats)
+    # 导购：对比画像里的锅和这道菜要的锅，算出「已有 / 还缺」；再把食材变成采购清单
+    catalog = shop.load_shop()
+    me = current_user()
+    need_pots = shop.pots_needed(shop.recipe_tools_text(recipe, steps))
+    mine = user_cookware(me)
+    gear = {
+        'has_profile': bool(mine),
+        'need': need_pots,
+        'have': [p for p in need_pots if p in mine],
+        'missing': [(p, catalog['cookware'].get(p)) for p in need_pots if p not in mine],
+        'tools': [(name,) + shop.tool_item(catalog, name) for name in shop.other_tools(recipe)],
+    }
+    shopping = shop.shopping_list(recipe['ingredients_list'], catalog)
+    return render_template('recipe_detail.html', recipe=recipe, steps=steps, questions=questions, stats=stats,
+                           gear=gear, shopping=shopping, shop_cfg=catalog)
 # 存质疑的路由
 @app.route('/question', methods=['POST'])
 def ask_question():
@@ -280,7 +316,7 @@ def save_verdict():
     flash(msg)
     return redirect(f'/question/{question_id}')
 AVATARS = ['🍳', '👨‍🍳', '👩‍🍳', '🐱', '🐶', '🦊', '🐼', '🎃']
-POTS = ['炒锅', '电饭煲', '微波炉', '空气炸锅', '蒸锅', '平底锅']  # 画像页能选、推荐要检查的六种锅
+POTS = shop.POTS  # 画像页能选、推荐要检查的六种锅（定义在 shop.py，大家共用一份）
 @app.route('/profile', methods=['GET', 'POST'])  # 画像页，GET 显示，POST 保存
 def profile():  # 处理画像的函数
     if request.method == 'POST':  # 保存
@@ -333,10 +369,8 @@ def recommend():  # 处理推荐页的函数
         cannot_make = []  # 做不了的菜，放这里
         for recipe in recipes:  # 一道一道过所有菜
             steps = conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (recipe['id'],)).fetchall()
-            tools_text = ' '.join(s['tools'] for s in steps if s['tools'])  # 把这道菜所有步骤的工具拼起来
-            if recipe['tools_list']:
-                tools_text += ' ' + recipe['tools_list']
-            missing = [pot for pot in POTS if pot in tools_text and pot not in my_cookware]  # 这道菜提到了、但用户没有的锅
+            # 这道菜要用、但用户没有的锅（括号里的补充说明不算，例如「蒸锅拿掉蒸笼就行」）
+            missing = [pot for pot in shop.pots_needed(shop.recipe_tools_text(recipe, steps)) if pot not in my_cookware]
             if missing:
                 cannot_make.append((recipe, missing))
             else:
@@ -582,6 +616,79 @@ def vote():
     finally:
         conn.close()
     return {'ok': True, 'message': '已记下你的评价，谢谢！', 'stats': stats}
+def all_recipes_with_pots(conn):
+    # 每道菜要用哪几口锅：[(菜, [锅])]，入门备厨页用
+    result = []
+    for recipe in conn.execute('SELECT * FROM recipes ORDER BY id').fetchall():
+        steps = conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (recipe['id'],)).fetchall()
+        result.append((recipe, shop.pots_needed(shop.recipe_tools_text(recipe, steps))))
+    return result
+@app.route('/starter')  # 入门备厨：家里锅不全的人，先补哪件最划算
+def starter():
+    conn = get_db()
+    try:
+        recipes_pots = all_recipes_with_pots(conn)
+    finally:
+        conn.close()
+    catalog = shop.load_shop()
+    mine = user_cookware(current_user())
+    kit, kit_covered = shop.starter_set(recipes_pots, 3)
+    no_wok = [r for r, need in recipes_pots if '炒锅' not in need]
+    can_now = [r for r, need in recipes_pots if set(need) <= set(mine)]
+    ranking = shop.best_unlock(recipes_pots, mine)
+    return render_template('starter.html', catalog=catalog, mine=mine, kit=kit, kit_covered=kit_covered,
+                           no_wok=no_wok, can_now=can_now, ranking=ranking, total=len(recipes_pots))
+SHOP_SOURCES = {'detail': '详情页·缺的锅', 'tool': '详情页·小工具', 'list': '采购清单', 'starter': '入门备厨'}
+@app.route('/go')  # 购买按钮先经过这里：记一次点击，再跳去平台页面
+def go_buy():
+    catalog = shop.load_shop()
+    kind = request.args.get('kind', '')
+    key = (request.args.get('key') or '').strip()
+    platform = request.args.get('platform', '')
+    source = request.args.get('from', '')
+    recipe_id = request.args.get('recipe', type=int)
+    if platform not in catalog['platforms'] or source not in SHOP_SOURCES:
+        return render_template('error.html', message='购买链接不完整。'), 400
+    url = None
+    if kind in ('cookware', 'tool'):  # 锅和小工具：只认配置里有的商品，网址也只用配置里的
+        item = catalog['cookware' if kind == 'cookware' else 'tools'].get(key)
+        if item:
+            url = next((o['url'] for o in item['offers'] if o['platform'] == platform), None)
+    elif kind == 'ingredient' and 0 < len(key) <= 30:  # 食材：用平台公开搜索页搜这个名字
+        url = shop.search_url(catalog, platform, key)
+    if not url or not url.startswith('https://'):
+        return render_template('error.html', message='没找到这个商品。'), 404
+    conn = get_db()
+    try:
+        conn.execute('INSERT INTO shop_clicks (kind, item_key, platform, source, recipe_id, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+                     (kind, key, platform, source, recipe_id, session.get('user_id')))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url)
+@app.route('/stats')  # 导购点击统计（本机演示数据）
+def shop_stats():
+    catalog = shop.load_shop()
+    conn = get_db()
+    try:
+        total = conn.execute('SELECT COUNT(*) FROM shop_clicks').fetchone()[0]
+        by_platform = conn.execute('SELECT platform, COUNT(*) AS n FROM shop_clicks GROUP BY platform ORDER BY n DESC').fetchall()
+        by_source = conn.execute('SELECT source, COUNT(*) AS n FROM shop_clicks GROUP BY source ORDER BY n DESC').fetchall()
+        top_items = conn.execute('''SELECT kind, item_key, COUNT(*) AS n FROM shop_clicks
+            GROUP BY kind, item_key ORDER BY n DESC, item_key LIMIT 10''').fetchall()
+        top_recipes = conn.execute('''SELECT r.id, r.name,
+            (SELECT COUNT(*) FROM recipe_views v WHERE v.recipe_id = r.id) AS views,
+            (SELECT COUNT(*) FROM shop_clicks c WHERE c.recipe_id = r.id) AS clicks
+            FROM recipes r ORDER BY clicks DESC, views DESC, r.id LIMIT 10''').fetchall()
+        views = conn.execute('SELECT COUNT(*) FROM recipe_views').fetchone()[0]
+        detail_clicks = conn.execute("SELECT COUNT(*) FROM shop_clicks WHERE source IN ('detail', 'tool', 'list')").fetchone()[0]
+        recent = conn.execute('SELECT * FROM shop_clicks ORDER BY id DESC LIMIT 10').fetchall()
+    finally:
+        conn.close()
+    rate = round(detail_clicks / views * 100, 1) if views else None
+    return render_template('stats.html', catalog=catalog, total=total, by_platform=by_platform, by_source=by_source,
+                           top_items=top_items, top_recipes=top_recipes, views=views, detail_clicks=detail_clicks,
+                           rate=rate, recent=recent, sources=SHOP_SOURCES)
 # 出错时给中文页面，不要让评委看到英文报错
 @app.errorhandler(404)
 def not_found(e):

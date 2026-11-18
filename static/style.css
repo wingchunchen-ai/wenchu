@@ -261,3 +261,63 @@ button, .search button {
 .bottom-nav a.active { color: #FF7A45; font-weight: bold; }
 .hero-btn { border: none; cursor: pointer; }
 .popup-box button { margin-top: 8px; }
+/* 导购：缺的锅、商品卡片、采购清单、统计 */
+.gear, details.shopping {
+  background: #fff;
+  border: 1px solid #e3d5bb;
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin: 12px 0;
+}
+details.shopping summary, .gear summary { cursor: pointer; font-weight: bold; padding: 6px 0; }
+details.shopping summary { font-size: 20px; color: #b4471c; }
+.sample-note {
+  background: #FFF4E5;
+  border: 1px dashed #E0A040;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: #8a5a00;
+}
+.product {
+  border: 1px solid #f0c9a8;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  background: #FFFBF4;
+}
+.product .why { font-size: 15px; margin: 6px 0; }
+.product .meta, .meta { color: #8a6f5f; font-size: 14px; }
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #E0A040;
+  color: #fff;
+  font-size: 12px;
+  vertical-align: middle;
+}
+.badge.soft { background: #c9b79c; }
+.buy-btn {
+  display: inline-block;
+  margin: 4px 6px 4px 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #FF7A45;
+  color: #fff;
+  font-size: 15px;
+}
+.buy-btn:hover { text-decoration: none; opacity: .9; }
+.buy-btn.small { padding: 3px 10px; font-size: 14px; }
+.shop-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.shop-table th, .shop-table td { border-bottom: 1px solid #eee2cc; padding: 6px 4px; text-align: left; vertical-align: top; }
+.shop-row.done td:nth-child(2) { color: #aaa; text-decoration: line-through; }
+.shop-row.done .buy-btn { background: #ccc; }
+.shop-total { font-size: 18px; }
+.tool-list { font-size: 15px; }
+.unlock li { margin-bottom: 18px; }
+.best { color: #b4471c; font-weight: bold; margin: 4px 0; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: #fff; border: 1px solid #e3d5bb; border-radius: 12px; padding: 10px; text-align: center; font-size: 14px; }
+.stat .num { font-size: 28px; font-weight: bold; color: #FF7A45; }

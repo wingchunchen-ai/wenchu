@@ -1,0 +1,909 @@
+{
+  "_说明": "稳厨导购商品配置。现在全部是示例数据（is_sample=true），链接是各平台公开搜索页，不是联盟推广链接。换成真实联盟链接时：把对应 offers 里的 url 换成联盟后台生成的推广链接，price 换成真实价格，is_sample 改成 false。改完重启网站即可，不用改代码。",
+  "disclaimer": "示例商品、价格仅供参考；按钮打开的是平台公开搜索页，不是真实推广链接。",
+  "platforms": {
+    "jd": {
+      "name": "京东",
+      "search_url": "https://search.jd.com/Search?keyword={kw}"
+    },
+    "taobao": {
+      "name": "淘宝",
+      "search_url": "https://s.taobao.com/search?q={kw}"
+    },
+    "pdd": {
+      "name": "拼多多",
+      "search_url": "https://mobile.yangkeduo.com/search_result.html?search_key={kw}"
+    }
+  },
+  "cookware": {
+    "炒锅": {
+      "name": "不粘炒锅 30–32cm（带锅盖）",
+      "price": 89,
+      "why": "锅够大，翻炒不容易溢出来；不粘涂层不容易糊锅；带盖还能焖、能收汁。一口锅能做稳厨大部分小炒。",
+      "keyword": "不粘炒锅 32cm 带盖",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E4%B8%8D%E7%B2%98%E7%82%92%E9%94%85%2032cm%20%E5%B8%A6%E7%9B%96",
+          "price": 89,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E4%B8%8D%E7%B2%98%E7%82%92%E9%94%85%2032cm%20%E5%B8%A6%E7%9B%96",
+          "price": 89,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E4%B8%8D%E7%B2%98%E7%82%92%E9%94%85%2032cm%20%E5%B8%A6%E7%9B%96",
+          "price": 89,
+          "is_sample": true
+        }
+      ]
+    },
+    "平底锅": {
+      "name": "不粘平底锅 24–26cm",
+      "price": 59,
+      "why": "煎蛋、煎鸡翅、做炒饭都行；不粘好洗；锅小，单手拿得动，小白最常用。",
+      "keyword": "不粘平底锅 26cm",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E4%B8%8D%E7%B2%98%E5%B9%B3%E5%BA%95%E9%94%85%2026cm",
+          "price": 59,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E4%B8%8D%E7%B2%98%E5%B9%B3%E5%BA%95%E9%94%85%2026cm",
+          "price": 59,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E4%B8%8D%E7%B2%98%E5%B9%B3%E5%BA%95%E9%94%85%2026cm",
+          "price": 59,
+          "is_sample": true
+        }
+      ]
+    },
+    "空气炸锅": {
+      "name": "4–5L 可视窗空气炸锅",
+      "price": 199,
+      "why": "不用倒一锅油，定好温度和时间按一下就行；能从窗口看到熟没熟，最不容易翻车。",
+      "keyword": "空气炸锅 可视 5L",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%20%E5%8F%AF%E8%A7%86%205L",
+          "price": 199,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%20%E5%8F%AF%E8%A7%86%205L",
+          "price": 199,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%20%E5%8F%AF%E8%A7%86%205L",
+          "price": 199,
+          "is_sample": true
+        }
+      ]
+    },
+    "电饭煲": {
+      "name": "3L 小电饭煲",
+      "price": 159,
+      "why": "一两个人刚好够用；除了煮饭，还能煲粥、做焖饭。",
+      "keyword": "电饭煲 3L",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E7%94%B5%E9%A5%AD%E7%85%B2%203L",
+          "price": 159,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E7%94%B5%E9%A5%AD%E7%85%B2%203L",
+          "price": 159,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E7%94%B5%E9%A5%AD%E7%85%B2%203L",
+          "price": 159,
+          "is_sample": true
+        }
+      ]
+    },
+    "蒸锅": {
+      "name": "26cm 不锈钢双层蒸锅",
+      "price": 79,
+      "why": "拿掉蒸笼就是汤锅，一锅两用；稳厨好几道菜写着「蒸锅拿掉蒸笼就行」。",
+      "keyword": "不锈钢蒸锅 双层 26cm",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E4%B8%8D%E9%94%88%E9%92%A2%E8%92%B8%E9%94%85%20%E5%8F%8C%E5%B1%82%2026cm",
+          "price": 79,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E4%B8%8D%E9%94%88%E9%92%A2%E8%92%B8%E9%94%85%20%E5%8F%8C%E5%B1%82%2026cm",
+          "price": 79,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E4%B8%8D%E9%94%88%E9%92%A2%E8%92%B8%E9%94%85%20%E5%8F%8C%E5%B1%82%2026cm",
+          "price": 79,
+          "is_sample": true
+        }
+      ]
+    },
+    "微波炉": {
+      "name": "20L 机械旋钮微波炉",
+      "price": 399,
+      "why": "热饭、化冻、做简单蒸蛋都行；旋钮款比触屏款更好上手。",
+      "keyword": "微波炉 20L 机械",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E5%BE%AE%E6%B3%A2%E7%82%89%2020L%20%E6%9C%BA%E6%A2%B0",
+          "price": 399,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E5%BE%AE%E6%B3%A2%E7%82%89%2020L%20%E6%9C%BA%E6%A2%B0",
+          "price": 399,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E5%BE%AE%E6%B3%A2%E7%82%89%2020L%20%E6%9C%BA%E6%A2%B0",
+          "price": 399,
+          "is_sample": true
+        }
+      ]
+    }
+  },
+  "tools": {
+    "小汤锅": {
+      "name": "18cm 小汤锅 / 奶锅",
+      "price": 49,
+      "why": "焯水、煮面、热牛奶都用得上，一个人用刚好。",
+      "keyword": "小汤锅 18cm",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E5%B0%8F%E6%B1%A4%E9%94%85%2018cm",
+          "price": 49,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E5%B0%8F%E6%B1%A4%E9%94%85%2018cm",
+          "price": 49,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E5%B0%8F%E6%B1%A4%E9%94%85%2018cm",
+          "price": 49,
+          "is_sample": true
+        }
+      ]
+    },
+    "锅盖": {
+      "name": "通用玻璃锅盖",
+      "price": 25,
+      "why": "焖煮、防溅油都要用；玻璃盖能看到锅里的情况。",
+      "keyword": "通用玻璃锅盖",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E9%80%9A%E7%94%A8%E7%8E%BB%E7%92%83%E9%94%85%E7%9B%96",
+          "price": 25,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E9%80%9A%E7%94%A8%E7%8E%BB%E7%92%83%E9%94%85%E7%9B%96",
+          "price": 25,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E9%80%9A%E7%94%A8%E7%8E%BB%E7%92%83%E9%94%85%E7%9B%96",
+          "price": 25,
+          "is_sample": true
+        }
+      ]
+    },
+    "锅铲": {
+      "name": "硅胶锅铲",
+      "price": 15,
+      "why": "不刮伤不粘锅，耐高温。",
+      "keyword": "硅胶锅铲",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E7%A1%85%E8%83%B6%E9%94%85%E9%93%B2",
+          "price": 15,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E7%A1%85%E8%83%B6%E9%94%85%E9%93%B2",
+          "price": 15,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E7%A1%85%E8%83%B6%E9%94%85%E9%93%B2",
+          "price": 15,
+          "is_sample": true
+        }
+      ]
+    },
+    "刀": {
+      "name": "家用中片刀",
+      "price": 39,
+      "why": "切肉切菜一把搞定。",
+      "keyword": "家用菜刀 中片刀",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E5%AE%B6%E7%94%A8%E8%8F%9C%E5%88%80%20%E4%B8%AD%E7%89%87%E5%88%80",
+          "price": 39,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E5%AE%B6%E7%94%A8%E8%8F%9C%E5%88%80%20%E4%B8%AD%E7%89%87%E5%88%80",
+          "price": 39,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E5%AE%B6%E7%94%A8%E8%8F%9C%E5%88%80%20%E4%B8%AD%E7%89%87%E5%88%80",
+          "price": 39,
+          "is_sample": true
+        }
+      ]
+    },
+    "案板": {
+      "name": "竹制案板",
+      "price": 29,
+      "why": "轻、好洗，比塑料板更稳。",
+      "keyword": "竹砧板",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E7%AB%B9%E7%A0%A7%E6%9D%BF",
+          "price": 29,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E7%AB%B9%E7%A0%A7%E6%9D%BF",
+          "price": 29,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E7%AB%B9%E7%A0%A7%E6%9D%BF",
+          "price": 29,
+          "is_sample": true
+        }
+      ]
+    },
+    "打蛋器": {
+      "name": "手动打蛋器",
+      "price": 12,
+      "why": "做慕斯、打蛋液都要用。",
+      "keyword": "手动打蛋器",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E6%89%8B%E5%8A%A8%E6%89%93%E8%9B%8B%E5%99%A8",
+          "price": 12,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E6%89%8B%E5%8A%A8%E6%89%93%E8%9B%8B%E5%99%A8",
+          "price": 12,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E6%89%8B%E5%8A%A8%E6%89%93%E8%9B%8B%E5%99%A8",
+          "price": 12,
+          "is_sample": true
+        }
+      ]
+    },
+    "空气炸锅纸": {
+      "name": "空气炸锅专用吸油纸",
+      "price": 15,
+      "why": "垫在炸篮里，不粘、好清洗。",
+      "keyword": "空气炸锅纸",
+      "is_sample": true,
+      "offers": [
+        {
+          "platform": "jd",
+          "url": "https://search.jd.com/Search?keyword=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%E7%BA%B8",
+          "price": 15,
+          "is_sample": true
+        },
+        {
+          "platform": "taobao",
+          "url": "https://s.taobao.com/search?q=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%E7%BA%B8",
+          "price": 15,
+          "is_sample": true
+        },
+        {
+          "platform": "pdd",
+          "url": "https://mobile.yangkeduo.com/search_result.html?search_key=%E7%A9%BA%E6%B0%94%E7%82%B8%E9%94%85%E7%BA%B8",
+          "price": 15,
+          "is_sample": true
+        }
+      ]
+    }
+  },
+  "ingredients": [
+    {
+      "match": [
+        "鸡翅"
+      ],
+      "name": "鸡翅",
+      "unit": "约 500g",
+      "price": 25,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "可乐"
+      ],
+      "name": "可乐",
+      "unit": "330ml 一罐",
+      "price": 3,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "开背虾仁",
+        "虾仁"
+      ],
+      "name": "虾仁",
+      "unit": "约 250g",
+      "price": 30,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "玉米淀粉"
+      ],
+      "name": "玉米淀粉",
+      "unit": "一袋",
+      "price": 6,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "芥末蛋黄酱"
+      ],
+      "name": "芥末蛋黄酱",
+      "unit": "一瓶",
+      "price": 15,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "沙拉酱"
+      ],
+      "name": "沙拉酱",
+      "unit": "一瓶",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "奥利奥"
+      ],
+      "name": "奥利奥饼干",
+      "unit": "一盒",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "黄油"
+      ],
+      "name": "黄油",
+      "unit": "一块",
+      "price": 18,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "黑巧"
+      ],
+      "name": "黑巧克力",
+      "unit": "约 200g",
+      "price": 25,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "巧克力粉"
+      ],
+      "name": "可可粉",
+      "unit": "一小袋",
+      "price": 12,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "巧克力"
+      ],
+      "name": "巧克力",
+      "unit": "一板",
+      "price": 12,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "吉利丁"
+      ],
+      "name": "吉利丁片",
+      "unit": "一小盒",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "淡奶油"
+      ],
+      "name": "淡奶油",
+      "unit": "250ml",
+      "price": 18,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "牛奶"
+      ],
+      "name": "牛奶",
+      "unit": "一盒",
+      "price": 6,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "花菜"
+      ],
+      "name": "花菜",
+      "unit": "一颗",
+      "price": 6,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "五花肉"
+      ],
+      "name": "五花肉",
+      "unit": "约 300g",
+      "price": 18,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "豆瓣酱"
+      ],
+      "name": "郫县豆瓣酱",
+      "unit": "一瓶",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "小米辣"
+      ],
+      "name": "小米辣",
+      "unit": "一小把",
+      "price": 3,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "吐司"
+      ],
+      "name": "吐司",
+      "unit": "一袋",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "奶酪棒"
+      ],
+      "name": "奶酪棒",
+      "unit": "一盒",
+      "price": 20,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "鱿鱼"
+      ],
+      "name": "鱿鱼（已处理）",
+      "unit": "约 400g",
+      "price": 25,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "干葱"
+      ],
+      "name": "干葱",
+      "unit": "一小把",
+      "price": 4,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "土豆"
+      ],
+      "name": "土豆",
+      "unit": "2 个",
+      "price": 4,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "鸡腿"
+      ],
+      "name": "鸡腿肉",
+      "unit": "约 400g",
+      "price": 18,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "米饭"
+      ],
+      "name": "米饭（或大米）",
+      "unit": "一份",
+      "price": 3,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "龙虾"
+      ],
+      "name": "小龙虾 / 龙虾（已处理）",
+      "unit": "2 只",
+      "price": 60,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "伊面",
+        "通心粉"
+      ],
+      "name": "伊面",
+      "unit": "一袋",
+      "price": 8,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "芝士片"
+      ],
+      "name": "芝士片",
+      "unit": "一包",
+      "price": 12,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "洋葱"
+      ],
+      "name": "洋葱",
+      "unit": "1 个",
+      "price": 2,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蟹醋"
+      ],
+      "name": "蟹醋（镇江香醋）",
+      "unit": "一瓶",
+      "price": 8,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "猪肝"
+      ],
+      "name": "猪肝",
+      "unit": "约 300g",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蔬菜"
+      ],
+      "name": "青菜",
+      "unit": "一把",
+      "price": 4,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "意面"
+      ],
+      "name": "意大利面",
+      "unit": "一袋",
+      "price": 10,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "培根"
+      ],
+      "name": "培根",
+      "unit": "一包",
+      "price": 15,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蘑菇"
+      ],
+      "name": "蘑菇",
+      "unit": "一盒",
+      "price": 6,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "鸡蛋"
+      ],
+      "name": "鸡蛋",
+      "unit": "10 个",
+      "price": 12,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "面粉"
+      ],
+      "name": "面粉",
+      "unit": "一袋",
+      "price": 8,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "淀粉"
+      ],
+      "name": "淀粉",
+      "unit": "一袋",
+      "price": 5,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "开水"
+      ],
+      "name": "开水",
+      "unit": "现烧",
+      "price": 0,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蚝油"
+      ],
+      "name": "蚝油",
+      "unit": "一瓶",
+      "price": 10,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "生抽"
+      ],
+      "name": "生抽",
+      "unit": "一瓶",
+      "price": 10,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "老抽"
+      ],
+      "name": "老抽",
+      "unit": "一瓶",
+      "price": 10,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "料酒"
+      ],
+      "name": "料酒",
+      "unit": "一瓶",
+      "price": 8,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "鸡粉"
+      ],
+      "name": "鸡粉",
+      "unit": "一袋",
+      "price": 8,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "味精"
+      ],
+      "name": "味精",
+      "unit": "一袋",
+      "price": 5,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "胡椒粉"
+      ],
+      "name": "胡椒粉",
+      "unit": "一瓶",
+      "price": 6,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蒜"
+      ],
+      "name": "大蒜",
+      "unit": "一头",
+      "price": 3,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "葱"
+      ],
+      "name": "小葱",
+      "unit": "一把",
+      "price": 2,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "姜"
+      ],
+      "name": "生姜",
+      "unit": "一块",
+      "price": 3,
+      "pantry": false,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "蜂蜜"
+      ],
+      "name": "蜂蜜",
+      "unit": "一瓶",
+      "price": 20,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "糖"
+      ],
+      "name": "白糖",
+      "unit": "一袋",
+      "price": 5,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "盐"
+      ],
+      "name": "盐",
+      "unit": "一袋",
+      "price": 3,
+      "pantry": true,
+      "is_sample": true
+    },
+    {
+      "match": [
+        "油"
+      ],
+      "name": "食用油（花生油/菜籽油）",
+      "unit": "一桶",
+      "price": 30,
+      "pantry": true,
+      "is_sample": true
+    }
+  ],
+  "ingredient_default_price": 5,
+  "ingredient_is_sample": true
+}

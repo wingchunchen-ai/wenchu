@@ -4,6 +4,7 @@
 {% include '_head.html' %}
   <title>{{ recipe['name'] }} - 稳厨</title>
 </head>
+{% import '_shop.html' as shopui %}
 <body data-reload-after-vote="1">
 <div class="page">
   {% include '_flash.html' %}
@@ -25,6 +26,97 @@
     {% if recipe['tools_list'] %}<p>要用的厨具：{{ recipe['tools_list'] }}</p>{% endif %}
     {% if recipe['summary_safety_tip'] %}<p>⚠️ 安全提醒：{{ recipe['summary_safety_tip'] }}</p>{% endif %}
   </div>
+  <h2>🍳 做这道菜的锅</h2>
+  <div class="gear">
+    {% if not gear.need %}
+    <p>这道菜不用开火的锅，家里有碗和冰箱就能做。</p>
+    {% elif not gear.has_profile %}
+    <p>要用：{{ '、'.join(gear.need) }}。</p>
+    <p class="hint">填一下家里的锅具，就能看到缺什么：<a href="/profile?edit=1">去填厨房画像</a></p>
+    {% else %}
+    <p>✅ 你家已有：{% if gear.have %}{{ '、'.join(gear.have) }}{% else %}（这道菜要的锅你都还没有）{% endif %}</p>
+    {% if gear.missing %}
+    <p>🛒 还缺：{% for p, item in gear.missing %}{{ p }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+    {{ shopui.disclaimer(shop_cfg) }}
+    {% for p, item in gear.missing %}{% if item %}{{ shopui.product_card(p, item, 'cookware', 'detail', recipe['id'], shop_cfg) }}{% endif %}{% endfor %}
+    <p class="hint">不想买？<a href="/recommend">看看你现在的锅能做哪些菜</a> · <a href="/starter">入门备厨：补哪件最划算</a></p>
+    {% else %}
+    <p>👍 这道菜要的锅你家都有，可以直接开做。</p>
+    {% endif %}
+    {% endif %}
+    {% if gear.tools %}
+    <details>
+      <summary>其他要用的小工具（{{ gear.tools|length }} 样，大多数家里都有）</summary>
+      <ul class="tool-list">
+        {% for name, key, item in gear.tools %}
+        <li>{{ name }}{% if item %} — <a target="_blank" rel="nofollow noopener sponsored" href="/go?kind=tool&key={{ key|urlencode }}&platform=jd&from=tool&recipe={{ recipe['id'] }}">没有？看示例款（约¥{{ item.price }}）</a>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+
+  {% if shopping %}
+  <details class="shopping" id="shopping">
+    <summary>🧺 一键备齐食材：生成采购清单</summary>
+    {{ shopui.disclaimer(shop_cfg) }}
+    <p class="hint">勾上「家里已有」的不会算进总价。调味料和可选的已经帮你先勾上了。</p>
+    <p>去哪买：
+      {% for code, pf in shop_cfg.platforms.items() %}
+      <label><input type="radio" name="shop-platform" value="{{ code }}" {% if loop.first %}checked{% endif %}> {{ pf.name }}</label>
+      {% endfor %}
+    </p>
+    <table class="shop-table">
+      <tr><th>家里已有</th><th>食材</th><th>示例估价</th><th></th></tr>
+      {% for row in shopping %}
+      <tr class="shop-row{% if row.at_home %} done{% endif %}" data-price="{{ row.price }}" data-name="{{ row.name }}">
+        <td><input type="checkbox" class="at-home" {% if row.at_home %}checked{% endif %} aria-label="家里已有"></td>
+        <td>{{ row.raw }}{% if row.optional %} <span class="badge soft">可选</span>{% endif %}<br><span class="meta">买：{{ row.name }}{% if row.unit %}（{{ row.unit }}）{% endif %}</span></td>
+        <td>¥{{ row.price }}</td>
+        <td><a class="buy-btn small" target="_blank" rel="nofollow noopener sponsored" data-key="{{ row.name }}"
+               href="/go?kind=ingredient&key={{ row.name|urlencode }}&platform=jd&from=list&recipe={{ recipe['id'] }}">去买</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="shop-total">还要买 <strong id="shop-count">0</strong> 样，估算 <strong>¥<span id="shop-sum">0</span></strong>（示例价格，按一份常见包装估，仅供参考）</p>
+    <p><button type="button" id="copy-list">复制采购清单</button></p>
+  </details>
+  <script>
+  (function () {
+    const box = document.getElementById('shopping');
+    const rows = box.querySelectorAll('.shop-row');
+    function platform() { return box.querySelector('input[name=shop-platform]:checked').value; }
+    function refresh() {
+      let sum = 0, count = 0;
+      rows.forEach(r => {
+        const home = r.querySelector('.at-home').checked;
+        r.classList.toggle('done', home);
+        if (!home) { sum += Number(r.dataset.price); count += 1; }
+        const a = r.querySelector('.buy-btn');
+        const u = new URL(a.href, location.origin);
+        u.searchParams.set('platform', platform());
+        a.href = u.pathname + u.search;
+      });
+      document.getElementById('shop-sum').textContent = sum;
+      document.getElementById('shop-count').textContent = count;
+    }
+    box.addEventListener('change', refresh);
+    document.getElementById('copy-list').addEventListener('click', () => {
+      const lines = [];
+      rows.forEach(r => { if (!r.querySelector('.at-home').checked) lines.push('□ ' + r.dataset.name); });
+      const text = {{ recipe['name']|tojson }} + ' 采购清单（稳厨）\n' + lines.join('\n') + '\n估算 ¥' + document.getElementById('shop-sum').textContent + '（示例价格）';
+      const done = () => alert('采购清单已复制，可以粘贴到微信或备忘录');
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done, () => prompt('复制下面的清单：', text));
+      } else {
+        prompt('复制下面的清单：', text);
+      }
+    });
+    refresh();
+  })();
+  </script>
+  {% endif %}
+
   <h2>做法</h2>
   <ol class="steps">
     {% for step in steps %}
