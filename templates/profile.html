@@ -8,11 +8,14 @@
 <div class="page">
 {% include '_flash.html' %}
 {% if user and not edit %}
-  <div style="text-align:center;font-size:64px;">{{ user['avatar'] or '🍳' }}</div>
-  <h1 style="text-align:center;">{{ user['nickname'] }}</h1>
-  <p>我的锅具：</p>
+  <div class="profile-card">
+  <div class="profile-cover"></div>
+  <div class="avatar-big">{{ user['avatar'] or '🍳' }}</div>
+  <h1>{{ user['nickname'] }}</h1>
+  <p class="meta">我的厨房画像</p>
+  <p class="label">我的锅具：</p>
   {% if user_cookware %}
-  <ul>
+  <ul class="pot-list">
   {% for item in user_cookware %}
     <li>{{ item }}</li>
   {% endfor %}
@@ -20,23 +23,29 @@
   {% else %}
   <p>还没选锅具，选了以后推荐会更准。</p>
   {% endif %}
-  <p><a href="/recommend" class="hero-btn">去看适合我的菜</a></p>
-  <p><a href="/profile?edit=1">更改画像</a></p>
-  <p><a href="/starter">🧰 入门备厨：补哪件锅能多做最多菜</a></p>
-  <p class="hint"><a href="/stats">导购点击统计（答辩演示用）</a></p>
+  <div class="profile-actions">
+    <a href="/recommend" class="hero-btn">去看适合我的菜 →</a>
+    <div class="profile-links">
+      <a href="/profile?edit=1">✏️ 更改画像</a>
+      <a href="/starter">🧰 入门备厨</a>
+    </div>
+  </div>
+  <p class="hint"><a href="/stats">📊 导购点击统计（答辩演示用）</a></p>
+  </div>
 {% else %}
-  <h1>{% if user %}更改画像{% else %}我的厨房画像{% endif %}</h1>
-  <form action="/profile" method="post">
-    <p>选个头像：</p>
-    <div>
+  <form action="/profile" method="post" class="profile-form">
+    <h1>{% if user %}更改画像{% else %}我的厨房画像{% endif %}</h1>
+    <p class="hint">花 10 秒告诉稳厨你家有什么锅，推荐会准很多。</p>
+    <p class="q">选个头像：</p>
+    <div class="avatar-pick">
     {% for emoji in avatars %}
-      <label style="font-size:32px;">
+      <label title="{{ emoji }}">
         <input type="radio" name="avatar" value="{{ emoji }}" {% if (user and user['avatar'] == emoji) or (not user and loop.first) %}checked{% endif %}>{{ emoji }}
       </label>
     {% endfor %}
     </div>
-    <p>昵称：<input type="text" name="nickname" value="{{ user['nickname'] if user else '' }}" required maxlength="20"></p>
-    <p>家里有哪些锅具（可多选）：</p>
+    <p class="q">昵称：<input type="text" name="nickname" value="{{ user['nickname'] if user else '' }}" required maxlength="20"></p>
+    <p class="q">家里有哪些锅具（可多选）：</p>
     <div class="cookware-grid">
       <label><img src="/static/cookware/chaoguo.jpg" alt=""><input type="checkbox" name="cookware" value="炒锅" {% if '炒锅' in user_cookware %}checked{% endif %}>炒锅</label>
       <label><img src="/static/cookware/dianfanbao.jpg" alt=""><input type="checkbox" name="cookware" value="电饭煲" {% if '电饭煲' in user_cookware %}checked{% endif %}>电饭煲</label>

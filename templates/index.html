@@ -4,18 +4,41 @@
 {% include '_head.html' %}
 <title>稳厨 - 有什么锅，就做什么菜</title>
 </head>
-<body>
-<div class="hero">
-  <h1>稳厨</h1>
-  <p>欢迎来到稳厨：按你家里的锅具，找到能稳稳做成的菜</p>
-  <button class="hero-btn" onclick="showRecommend()">进入稳厨</button>
+<body class="home">
+{% include '_nav.html' %}
+<section class="home-hero">
+  <div class="hero-text">
+    <span class="eyebrow">🌿 给厨房小白的放心菜谱</span>
+    <h1>有什么锅，<br>就做<em>什么菜</em></h1>
+    <p class="lead">欢迎来到稳厨：按你家里的锅具，找到能稳稳做成的菜。每一步都写清楚做什么、用什么工具、要注意什么。</p>
+    <div class="hero-actions">
+      <button class="hero-btn" onclick="showRecommend()">进入稳厨 →</button>
+      <a class="btn btn-lg btn-ghost" href="/profile?edit=1">先填我家的锅</a>
+    </div>
+    <div class="hero-points"><span>按锅推荐</span><span>步骤带安全提示</span><span>缺锅一键备齐</span></div>
+  </div>
+  <div class="hero-visual">
+    <div class="mosaic">
+      <img src="/static/dishes/recipe-01.webp" alt="可乐鸡翅">
+      <img src="/static/dishes/recipe-12.webp" alt="蛋炒饭">
+      <img src="/static/dishes/recipe-05.webp" alt="熔岩吐司">
+    </div>
+    <div class="float-card"><span class="dot">🍳</span><span><b>只有一口炒锅？</b>也能做好几道菜</span></div>
+    <p class="ai-note">菜品图由 AI（即梦）生成，仅作示意</p>
+  </div>
+</section>
+<section class="features">
+  <a class="feature" href="/recommend"><span class="ico">🍳</span><h3>按锅找菜</h3><p>告诉稳厨家里有什么锅，直接告诉你今天能做哪些菜。</p><span class="more">看为我推荐 →</span></a>
+  <a class="feature" href="/recipes"><span class="ico">📋</span><h3>一步步带着做</h3><p>每道菜都写明时间、食材、厨具和每一步的安全提醒。</p><span class="more">逛放心菜谱 →</span></a>
+  <a class="feature" href="/starter"><span class="ico">🧺</span><h3>缺锅缺菜一键备齐</h3><p>算出先补哪件锅最划算，食材自动生成采购清单。</p><span class="more">去入门备厨 →</span></a>
+</section>
+<p class="home-foot">导购商品为示例商品，价格仅供参考 · 菜品图由 AI 生成</p>
 <div id="recommend-popup" style="display:none;">
   <div class="popup-box">
     <h2>今日推荐</h2>
     <div id="recommend-list"></div>
     <button onclick="closePopup()">进入稳厨</button>
   </div>
-</div>
 </div>
 <script src="/static/vote.js"></script>
 <script>
@@ -37,7 +60,7 @@ function renderRecommend(data) {
       p.appendChild(document.createTextNode('还没填过家里有的锅具，'));
       const a = document.createElement('a');
       a.href = '/profile';
-      a.style.color = '#FF8C00';
+      a.style.fontWeight = '700';
       a.textContent = '先去填一下';
       p.appendChild(a);
       p.appendChild(document.createTextNode('，稳厨每天给你推能做的菜。'));

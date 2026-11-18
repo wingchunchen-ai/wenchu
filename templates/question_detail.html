@@ -11,7 +11,7 @@
     <p>
         菜：<a href="/recipe/{{ question['recipe_id'] }}">{{ question['recipe_name'] }}</a>
     </p>
-    <p>{{ question['question_text'] }}</p>
+    <p class="section quote">“{{ question['question_text'] }}”</p>
     <p>（{{ question['nickname'] or '匿名' }}，{{ question['created_at'] }}）</p>
     <h3>站队结果</h3>
     {% if counts %}
@@ -27,6 +27,7 @@
     {% if not me %}
     <p class="hint">站队要先 <a href="/profile">保存厨房画像</a>。</p>
     {% endif %}
+    <div class="verdict-row">
     <form action="/verdict" method="post">
         <input type="hidden" name="question_id" value="{{ question['id'] }}">
         <input type="hidden" name="verdict" value="确实有错">
@@ -37,6 +38,7 @@
         <input type="hidden" name="verdict" value="质疑不对">
         <button type="submit">质疑不对</button>
     </form>
+    </div>
     <p><a href="/questions">← 返回被质疑区</a></p>
 </div>
 {% include '_nav.html' %}

@@ -6,26 +6,42 @@
 </head>
 {% import '_shop.html' as shopui %}
 <body data-reload-after-vote="1">
+{% include '_nav.html' %}
 <div class="page">
   {% include '_flash.html' %}
-  <p><a href="/all">← 回到全部菜谱</a></p>
-  <h1>{{ recipe['name'] }}</h1>
-  {% if recipe['image'] %}<img src="{{ recipe['image'] }}" alt="{{ recipe['name'] }}" class="detail-img">{% endif %}
-  {% if me and me['id'] == recipe['user_id'] %}
-  <p><a href="/edit/{{ recipe['id'] }}">✏️ 编辑这道菜</a></p>
-  {% endif %}
-  {% if recipe['description'] %}<p>{{ recipe['description'] }}</p>{% endif %}
-  <div class="facts">
-    {% if recipe['category'] %}<p>分类：{{ recipe['category'] }}</p>{% endif %}
-    {% if recipe['time_minutes'] %}
-    <p>大概时间：{{ recipe['time_minutes'] }} 分钟（熟练的话会更快哦）</p>
-    {% else %}
-    <p>大概时间：暂未填写</p>
+  <p class="crumb"><a href="/all">← 回到全部菜谱</a></p>
+  <div class="detail-hero">
+    {% if recipe['image'] %}
+    <div class="detail-media">
+      <img src="{{ recipe['image'] }}" alt="{{ recipe['name'] }}" class="detail-img">
+      {% if recipe['image'].startswith('/static/dishes/') %}<p class="ai-note">菜品图由 AI（即梦）生成，仅作示意</p>{% endif %}
+    </div>
     {% endif %}
-    {% if recipe['ingredients_list'] %}<p>要用的食材：{{ recipe['ingredients_list'] }}</p>{% endif %}
-    {% if recipe['tools_list'] %}<p>要用的厨具：{{ recipe['tools_list'] }}</p>{% endif %}
-    {% if recipe['summary_safety_tip'] %}<p>⚠️ 安全提醒：{{ recipe['summary_safety_tip'] }}</p>{% endif %}
+    <div class="detail-info">
+      <div class="chips">
+        {% if recipe['category'] %}<span class="chip red">{{ recipe['category'] }}</span>{% endif %}
+        {% if recipe['time_minutes'] %}<span class="chip">⏱ 约 {{ recipe['time_minutes'] }} 分钟</span>{% endif %}
+        <span class="chip green">{% if stats['rate'] is not none %}👍 好评 {{ stats['rate'] }}%{% else %}新菜，等你评价{% endif %}</span>
+      </div>
+      <h1>{{ recipe['name'] }}</h1>
+      {% if me and me['id'] == recipe['user_id'] %}
+      <p><a class="edit-link" href="/edit/{{ recipe['id'] }}">✏️ 编辑这道菜</a></p>
+      {% endif %}
+      {% if recipe['description'] %}<p class="lead">{{ recipe['description'] }}</p>{% endif %}
+      <div class="facts">
+        {% if recipe['category'] %}<p>🏷️ 分类：{{ recipe['category'] }}</p>{% endif %}
+        {% if recipe['time_minutes'] %}
+        <p>⏱ 大概时间：{{ recipe['time_minutes'] }} 分钟（熟练的话会更快哦）</p>
+        {% else %}
+        <p>⏱ 大概时间：暂未填写</p>
+        {% endif %}
+        {% if recipe['ingredients_list'] %}<p>🥬 要用的食材：{{ recipe['ingredients_list'] }}</p>{% endif %}
+        {% if recipe['tools_list'] %}<p>🍳 要用的厨具：{{ recipe['tools_list'] }}</p>{% endif %}
+        {% if recipe['summary_safety_tip'] %}<p class="safety">⚠️ 安全提醒：{{ recipe['summary_safety_tip'] }}</p>{% endif %}
+      </div>
+    </div>
   </div>
+  <div class="section">
   <h2>🍳 做这道菜的锅</h2>
   <div class="gear">
     {% if not gear.need %}
@@ -34,14 +50,14 @@
     <p>要用：{{ '、'.join(gear.need) }}。</p>
     <p class="hint">填一下家里的锅具，就能看到缺什么：<a href="/profile?edit=1">去填厨房画像</a></p>
     {% else %}
-    <p>✅ 你家已有：{% if gear.have %}{{ '、'.join(gear.have) }}{% else %}（这道菜要的锅你都还没有）{% endif %}</p>
+    <p class="{% if gear.have %}have{% else %}none{% endif %}">✅ 你家已有：{% if gear.have %}{{ '、'.join(gear.have) }}{% else %}（这道菜要的锅你都还没有）{% endif %}</p>
     {% if gear.missing %}
-    <p>🛒 还缺：{% for p, item in gear.missing %}{{ p }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+    <p class="lack">🛒 还缺：{% for p, item in gear.missing %}{{ p }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
     {{ shopui.disclaimer(shop_cfg) }}
     {% for p, item in gear.missing %}{% if item %}{{ shopui.product_card(p, item, 'cookware', 'detail', recipe['id'], shop_cfg) }}{% endif %}{% endfor %}
     <p class="hint">不想买？<a href="/recommend">看看你现在的锅能做哪些菜</a> · <a href="/starter">入门备厨：补哪件最划算</a></p>
     {% else %}
-    <p>👍 这道菜要的锅你家都有，可以直接开做。</p>
+    <p class="have">👍 这道菜要的锅你家都有，可以直接开做。</p>
     {% endif %}
     {% endif %}
     {% if gear.tools %}
@@ -55,13 +71,14 @@
     </details>
     {% endif %}
   </div>
+  </div>
 
   {% if shopping %}
-  <details class="shopping" id="shopping">
+  <details class="shopping section" id="shopping">
     <summary>🧺 一键备齐食材：生成采购清单</summary>
     {{ shopui.disclaimer(shop_cfg) }}
     <p class="hint">勾上「家里已有」的不会算进总价。调味料和可选的已经帮你先勾上了。</p>
-    <p>去哪买：
+    <p class="platform-pick">去哪买：
       {% for code, pf in shop_cfg.platforms.items() %}
       <label><input type="radio" name="shop-platform" value="{{ code }}" {% if loop.first %}checked{% endif %}> {{ pf.name }}</label>
       {% endfor %}
@@ -117,7 +134,8 @@
   </script>
   {% endif %}
 
-  <h2>做法</h2>
+  <div class="section">
+  <h2>👩‍🍳 做法</h2>
   <ol class="steps">
     {% for step in steps %}
     <li>
@@ -129,16 +147,20 @@
     </li>
     {% endfor %}
   </ol>
+  </div>
+  <div class="section">
   <h2>好不好吃？</h2>
-  <p>{% if stats['rate'] is not none %}好评率 {{ stats['rate'] }}%（{{ stats['total'] }}人评价）{% else %}暂无评价，来做第一个评价的人吧{% endif %}</p>
-  <p>
+  <p class="rate-big">{% if stats['rate'] is not none %}好评率 {{ stats['rate'] }}%（{{ stats['total'] }}人评价）{% else %}暂无评价，来做第一个评价的人吧{% endif %}</p>
+  <p class="vote-row">
     <button onclick="vote({{ recipe['id'] }}, 'like')">👍 好吃</button>
     <button onclick="vote({{ recipe['id'] }}, 'dislike')">👎 不好吃</button>
   </p>
+  </div>
+  <div class="section">
   <h2>觉得这道菜有问题？</h2>
   {% if questions %}
   <p>这道菜已有的质疑（点进去可以站队）：</p>
-  <ul>
+  <ul class="q-list">
     {% for q in questions %}
     <li><a href="/question/{{ q['id'] }}">{{ q['question_text'] }}</a>（{{ q['nickname'] or '匿名' }}，{{ q['created_at'] }}）</li>
     {% endfor %}
@@ -152,9 +174,9 @@
     <textarea name="question_text" rows="3" placeholder="比如：照着「{{ recipe['name'] }}」做，哪一步出了问题？时间、火候、用量哪里不对？" required></textarea>
     <p><button type="submit">提交质疑</button></p>
   </form>
-  <p><a href="/all">← 回到全部菜谱</a> · <a href="/recipes">放心菜谱</a></p>
+  </div>
+  <p class="crumb"><a href="/all">← 回到全部菜谱</a> · <a href="/recipes">放心菜谱</a></p>
 </div>
 <script src="/static/vote.js"></script>
-{% include '_nav.html' %}
 </body>
 </html>

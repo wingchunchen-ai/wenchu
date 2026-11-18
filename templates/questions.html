@@ -10,7 +10,7 @@
     <p class="hint">照着做出了问题，就在菜谱详情页提质疑；其他人可以站队判断质疑对不对。</p>
     {% include '_flash.html' %}
     {% if questions %}
-    <ul>
+    <ul class="q-list">
     {% for q in questions %}
         <li>
             <a href="/question/{{ q['id'] }}">{{ q['question_text'] }}</a>

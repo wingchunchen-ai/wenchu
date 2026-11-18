@@ -37,15 +37,17 @@
   {% set unused = ranking|rejectattr(1)|map(attribute=0)|list %}
   {% if unused %}<p class="hint">{{ '、'.join(unused) }}：稳厨现在的菜还用不到，先不用买。</p>{% endif %}
 
-  <h2>入门三件套</h2>
+  <div class="kit-box">
+  <h2>🎁 入门三件套</h2>
   <p>只买这三件：<strong>{{ '、'.join(kit) }}</strong>，就能做稳厨里 <strong>{{ kit_covered|length }}</strong> / {{ total }} 道菜。</p>
   <details>
     <summary>看三件套的示例款</summary>
     {% for pot in kit %}{% if catalog.cookware.get(pot) %}{{ shopui.product_card(pot, catalog.cookware[pot], 'cookware', 'starter', None, catalog) }}{% endif %}{% endfor %}
   </details>
+  </div>
 
   <h2>没有炒锅也能做的菜（{{ no_wok|length }} 道）</h2>
-  <ul>
+  <ul class="link-list">
     {% for r in no_wok %}<li><a href="/recipe/{{ r['id'] }}">{{ r['name'] }}</a></li>{% endfor %}
   </ul>
 </div>

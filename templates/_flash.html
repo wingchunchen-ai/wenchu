@@ -1,5 +1,5 @@
 {% with msgs = get_flashed_messages() %}
   {% for msg in msgs %}
-  <p class="flash">{{ msg }}</p>
+  <p class="flash" role="status">{{ msg }}</p>
   {% endfor %}
 {% endwith %}

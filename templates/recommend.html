@@ -12,10 +12,10 @@
     <p><a href="/profile?edit=1" class="hero-btn">去填厨房画像</a></p>
     <p class="hint">家里一口锅都没有？先看 <a href="/starter">入门备厨</a>。</p>
     {% else %}
-    <p>你有的锅具：{{ '、'.join(user_cookware) }}（<a href="/profile?edit=1">改一改</a>）</p>
+    <p class="sample-note green">🍳 你有的锅具：{{ '、'.join(user_cookware) }}（<a href="/profile?edit=1">改一改</a>）</p>
     <h2>能做的</h2>
     {% if can_make %}
-    <ul>
+    <ul class="link-list ok">
         {% for recipe in can_make %}
         <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a></li>
         {% endfor %}
@@ -26,9 +26,9 @@
     <p class="hint">想多做几道？<a href="/starter">入门备厨：补哪件锅最划算</a></p>
     <h2>缺锅具</h2>
     {% if cannot_make %}
-    <ul>
+    <ul class="link-list lack">
         {% for recipe, missing in cannot_make %}
-        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a>（缺：{{ '、'.join(missing) }}）</li>
+        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}<span class="miss">（缺：{{ '、'.join(missing) }}）</span></a></li>
         {% endfor %}
     </ul>
     {% else %}
