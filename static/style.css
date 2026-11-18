@@ -631,3 +631,40 @@ details[open] > summary::after { transform: rotate(-90deg); }
 .recipe-card .chip.cost { white-space: nowrap; }
 .page > .sample-note.partner, .sample-note.partner { margin-top: 18px; }
 .stat-note { margin: 0 0 14px; }
+
+/* ---------- AI 拆菜 ---------- */
+.ai-hero { background: linear-gradient(135deg, var(--surface), var(--surface-2)); border: 1px solid var(--line); border-radius: 24px; padding: 18px 28px 22px; box-shadow: var(--shadow); }
+.ai-hero h1 { font-size: 26px; }
+.ai-form { display: grid; gap: 12px; margin-top: 14px; }
+.ai-form label { font-weight: 600; }
+.ai-form .req { color: var(--primary); }
+.ai-form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ai-form label.check { font-weight: 500; font-size: 14px; color: var(--ink-2); }
+.ai-form .examples { margin: 0; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ai-form .examples .chip:hover { background: var(--primary-50); color: var(--primary-600); text-decoration: none; }
+.ai-result-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 28px; }
+.ai-result-head h2 { margin: 0; }
+.mode-tag { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: var(--pill); font-size: 13px; font-weight: 700; }
+.mode-tag.ai { background: var(--herb-50); color: var(--herb); border: 1px solid #CFE5D4; }
+.mode-tag.rule { background: var(--amber-50); color: #9A5B07; border: 1px solid #F3DDB3; }
+.ai-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 0 22px; }
+.cook-list { list-style: none; padding: 0; margin: 0; }
+.cook-list li { padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line); margin: 8px 0; background: var(--surface-2); }
+.cook-list li.have-item { background: var(--herb-50); border-color: #CFE5D4; }
+.cook-list li.lack-item { background: var(--primary-50); border-color: var(--primary-100); }
+.cook-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cook-list .why { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+.badge.src-both { background: var(--herb-50); color: var(--herb); border-color: #CFE5D4; }
+.badge.src-rule { background: var(--primary-50); color: var(--primary-600); border-color: var(--primary-100); }
+.have-line { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--herb-50); color: #24502F; font-weight: 600; }
+.lack-line { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--primary-50); color: var(--primary-600); font-weight: 600; }
+.ai-cost { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 12px; }
+.ai-cost .big { font-size: 20px; margin: 0; }
+.ai-cost .big strong { font-size: 28px; color: var(--primary-600); }
+.shop-table tr.done td { color: var(--muted); }
+.dish-ai > .ai-note { margin-top: 18px; }
+@media (max-width: 760px) {
+  .ai-grid { grid-template-columns: 1fr; }
+  .ai-hero { padding: 14px 16px 18px; }
+  .ai-hero h1 { font-size: 22px; }
+}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+{% include '_head.html' %}
+  <title>AI 拆菜 - 稳厨</title>
+</head>
+{% import '_shop.html' as shopui %}
+<body>
+{% include '_nav.html' %}
+<div class="page dish-ai">
+  {% include '_flash.html' %}
+  <div class="ai-hero">
+    <p class="eyebrow">🤖 AI 拆菜 · 稳厨特色</p>
+    <h1>随便说一道菜，稳厨帮你拆成「要买什么、要用什么锅」</h1>
+    <p class="hint">AI 先读懂这道菜（DeepSeek 出初稿），再由稳厨经验库按做法核对锅具、补上漏掉的必备锅具，最后对照你的厨房算出还缺什么、大概花多少。</p>
+    <form method="post" action="/dish-ai" class="ai-form" id="dish-ai-form">
+      <label>菜名 <span class="req">*</span>
+        <input type="text" name="dish" maxlength="20" required placeholder="比如：宫保鸡丁" value="{{ dish }}">
+      </label>
+      <label>补充说明（可选）
+        <input type="text" name="description" maxlength="100" placeholder="比如：不要太辣、想用空气炸锅" value="{{ description }}">
+      </label>
+      <div class="ai-form-row">
+        <label class="check"><input type="checkbox" name="rules_only" value="1" {% if rules_only %}checked{% endif %}> 只用稳厨经验库（不调 AI，断网也能演示）</label>
+        <button type="submit" class="btn btn-primary btn-lg" id="ai-submit">开始拆菜 →</button>
+      </div>
+      <p class="examples">试试：{% for e in examples %}<a href="#" class="chip" data-dish="{{ e }}">{{ e }}</a>{% endfor %}</p>
+    </form>
+  </div>
+
+  {% if result %}
+  <div class="ai-result">
+    <div class="ai-result-head">
+      <h2>「{{ result.dish }}」拆解结果</h2>
+      {% if result.mode == 'AI+规则' %}
+      <span class="mode-tag ai">✨ AI+规则：AI 出初稿，稳厨经验库核对锅具</span>
+      {% else %}
+      <span class="mode-tag rule">🧭 规则兜底：这次没用 AI{% if result.ai_error %}（{{ result.ai_error }}）{% endif %}，只靠稳厨经验库</span>
+      {% endif %}
+    </div>
+    {% if result.matched %}<p class="meta">参考了：{{ result.matched }}</p>{% endif %}
+
+    {% if result.empty %}
+    <div class="empty-state">
+      <p>稳厨经验库暂时没认出这道菜的食材和做法。</p>
+      <p class="hint">可以在「补充说明」里写上做法（比如：红烧、清蒸、爆炒），或者打开 AI 再试一次。</p>
+    </div>
+    {% else %}
+    <div class="ai-grid">
+      <div class="section">
+        <h2>🥬 食材</h2>
+        <p><strong>主料：</strong>{{ '、'.join(result.main) if result.main else '（没拆出来）' }}</p>
+        {% if result.side %}<p><strong>辅料：</strong>{{ '、'.join(result.side) }}</p>{% endif %}
+        {% if result.season %}<p><strong>调味料：</strong>{{ '、'.join(result.season) }} <span class="meta">（按家里已有，不算钱）</span></p>{% endif %}
+        <p><strong>关键做法：</strong>{% for m in result.methods %}<span class="chip red">{{ m }}</span> {% else %}（没认出做法）{% endfor %}</p>
+        {% if result.tips %}<p class="sample-note green">💡 {{ result.tips }}</p>{% endif %}
+      </div>
+
+      <div class="section gear">
+        <h2>🍳 要用的锅具</h2>
+        <ul class="cook-list">
+          {% for c in result.cookware %}
+          <li class="{% if c.have %}have-item{% elif c.is_pot and result.know_pots %}lack-item{% endif %}">
+            <div class="cook-name">
+              <strong>{{ c.name }}</strong>{% if c.alt %}<span class="meta">（{{ c.alt }}）</span>{% endif %}
+              {% if c.source == 'both' %}<span class="badge src-both">AI 提出 · 规则确认</span>
+              {% elif c.source == 'rule' %}<span class="badge src-rule">稳厨规则</span>
+              {% else %}<span class="badge soft">AI 建议 · 选配</span>{% endif %}
+              {% if c.have %}<span class="chip green">家里有</span>{% elif c.is_pot and result.know_pots %}<span class="chip red">还缺</span>{% endif %}
+            </div>
+            <p class="why">{{ c.reason }}</p>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if result.dropped %}<p class="meta">AI 另外提到 {{ result.dropped|length }} 件（{{ '、'.join(result.dropped) }}），稳厨经验库不认识，先不列。</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🏠 对照我的厨房</h2>
+      {% if result.know_pots %}
+      <p>你家已有：{{ '、'.join(mine) }}（<a href="/profile?edit=1">改锅具</a>）</p>
+      {% if result.have %}<p class="have-line">✅ 已经有：{{ '、'.join(result.have) }}</p>{% endif %}
+      {% if result.missing %}<p class="lack-line">🛒 还缺：{{ '、'.join(result.missing) }}</p>
+      {% else %}<p class="have-line">👍 锅都齐了，买食材就能做。</p>{% endif %}
+      {% else %}
+      <p class="hint">还没填厨房画像，不知道你家有什么锅，所以锅具先不算钱。<a href="/profile?edit=1">填一下锅具</a>，就能看到「已有 / 还缺」。</p>
+      {% endif %}
+      {% if result.cost %}
+      <div class="ai-cost">
+        <p class="big">补齐约 <strong>¥{{ result.cost.total }}</strong></p>
+        <p class="meta">食材 ¥{{ result.cost.ingredients }}{% if result.know_pots %} + 还缺的锅 ¥{{ result.cost.cookware }}{% else %}（锅具未计）{% endif %}</p>
+      </div>
+      <details>
+        <summary>看食材怎么估的</summary>
+        <table class="shop-table">
+          <tr><th>食材</th><th>按什么买</th><th>示例价</th></tr>
+          {% for row in result.rows %}
+          <tr{% if row.at_home %} class="done"{% endif %}><td>{{ row.raw }}</td>
+            <td>{% if row.matched %}{{ row.name }}{% if row.unit %}（{{ row.unit }}）{% endif %}{% else %}<span class="meta">商品表里还没有，按默认示例价</span>{% endif %}</td>
+            <td>{% if row.at_home %}家里已有{% else %}¥{{ row.price }}{% endif %}</td></tr>
+          {% endfor %}
+        </table>
+      </details>
+      <p class="budget-note">🧺 算法和「本餐预算」一样：还缺的食材 + 画像里还缺的锅，调味料按家里已有。油温计、漏勺这类小工具不计。价格都是示例价，只是估个大概。</p>
+      {% endif %}
+    </div>
+    {{ shopui.disclaimer(shop_cfg) }}
+    {% endif %}
+  </div>
+  {% endif %}
+  <p class="ai-note">AI 拆菜结果仅供参考：AI 的初稿会被稳厨经验库核对，锅具以规则为准；不认识的锅具不会列出来。</p>
+</div>
+<script>
+(function () {
+  const form = document.getElementById('dish-ai-form');
+  form.querySelectorAll('[data-dish]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    form.dish.value = a.dataset.dish;
+    form.requestSubmit();
+  }));
+  form.addEventListener('submit', () => {
+    const b = document.getElementById('ai-submit');
+    b.textContent = '正在拆菜…（AI 最多等 20 秒）';
+    b.disabled = true;
+  });
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import os#拼路径、读环境变量
 import uuid#给上传的图片起一个不会重名的文件名
 import sqlite3#引入sql数据库
 import shop#导购：缺的锅、采购清单、入门备厨（商品数据在 shop_items.json）
+import dish_ai#AI 拆菜：DeepSeek 初稿 + 稳厨经验库（dish_rules.py）核对
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -656,6 +657,35 @@ def starter():
     ranking = shop.best_unlock(recipes_pots, mine)
     return render_template('starter.html', catalog=catalog, mine=mine, kit=kit, kit_covered=kit_covered,
                            no_wok=no_wok, can_now=can_now, ranking=ranking, total=len(recipes_pots))
+def known_recipes_for_rules(conn):
+    # 给规则兜底用：站内每道菜的名字、食材、厨具，和步骤里的做法文字
+    result = []
+    for r in conn.execute('SELECT id, name, ingredients_list, tools_list FROM recipes ORDER BY id').fetchall():
+        steps = conn.execute('SELECT title, action, tools FROM recipe_steps WHERE recipe_id = ? ORDER BY step_no', (r['id'],)).fetchall()
+        result.append({'id': r['id'], 'name': r['name'], 'ingredients_list': r['ingredients_list'] or '',
+                       'tools_list': ' 、'.join([r['tools_list'] or ''] + [s['tools'] or '' for s in steps]),
+                       'steps_text': ' '.join((s['title'] or '') + ' ' + (s['action'] or '') for s in steps)})
+    return result
+@app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：输入一道菜，拆出食材、做法、锅具、缺什么、花多少
+def dish_ai_page():
+    form = request.form if request.method == 'POST' else request.args
+    dish = (form.get('dish') or '').strip()[:20]
+    description = (form.get('description') or '').strip()[:100]
+    rules_only = form.get('rules_only') == '1'
+    mine = user_cookware(current_user())
+    catalog = shop.load_shop()
+    result = None
+    if request.method == 'POST' and not dish:
+        flash('请先写上菜名。')
+    elif dish:
+        conn = get_db()
+        try:
+            known = known_recipes_for_rules(conn)
+        finally:
+            conn.close()
+        result = dish_ai.analyze(dish, description, mine, bool(mine), known, catalog, use_ai=not rules_only)
+    return render_template('dish_ai.html', result=result, dish=dish, description=description, rules_only=rules_only,
+                           mine=mine, shop_cfg=catalog, examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
 SHOP_SOURCES = {'detail': '详情页·缺的锅', 'tool': '详情页·小工具', 'list': '采购清单', 'starter': '入门备厨'}
 @app.route('/go')  # 购买按钮先经过这里：记一次点击，再跳去平台页面
 def go_buy():
