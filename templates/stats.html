@@ -2,12 +2,14 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
+{% import '_shop.html' as shopui %}
   <title>导购点击统计 - 稳厨</title>
 </head>
 <body>
 <div class="page">
   <h1>📊 导购点击统计</h1>
-  <p class="sample-note">⚠️ 这是本机记录的演示数据，只统计「点了购买按钮」的次数，不代表真实成交。商品都是示例商品；真实返佣要以联盟后台的成交数据为准。</p>
+  <p class="sample-note stat-note">📐 这里是演示数据：数字是演示时自己点出来的，不是真实用户数据，只用来展示统计口径：详情浏览 → 购买按钮点击 → 点击率。点击不等于成交；目前没有签约、没有佣金、不能下单。</p>
+  {{ shopui.disclaimer(catalog) }}
   <div class="stat-grid">
     <div class="stat"><div class="num">{{ views }}</div><div>菜谱详情浏览</div></div>
     <div class="stat"><div class="num">{{ detail_clicks }}</div><div>详情页购买点击</div></div>

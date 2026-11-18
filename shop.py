@@ -123,3 +123,35 @@ def starter_set(recipes_pots, size=3):
         chosen.append(best)
     covered = [r for r, need in recipes_pots if set(need) <= set(chosen)]
     return chosen, covered
+
+
+# 本餐预算：列表页和推荐页可以按「补齐要花多少钱」筛选
+BUDGETS = [30, 50, 100]  # 页面上的档位，另外还有「不限」
+
+
+def parse_budget(value):
+    # 网址里的 budget 只认上面几档，其他一律当「不限」（返回 None）
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return None
+    return value if value in BUDGETS else None
+
+
+def meal_cost(recipe, steps, owned, catalog, know_pots=True):
+    # 估算做这道菜还要花多少钱 = 还缺的食材 + 还缺的锅（价格都是 shop_items.json 里的示例价）
+    # 食材沿用采购清单的算法：调味料、可选的算「家里已有」，不计入
+    # know_pots=False（没填厨房画像）时不知道家里有什么锅，锅具先不算，页面上会说明
+    ingredients = sum(r['price'] for r in shopping_list(recipe['ingredients_list'], catalog) if not r['at_home'])
+    missing = [p for p in pots_needed(recipe_tools_text(recipe, steps)) if p not in owned] if know_pots else []
+    cookware = sum(catalog['cookware'][p]['price'] for p in missing if p in catalog['cookware'])
+    return {'ingredients': ingredients, 'cookware': cookware, 'total': ingredients + cookware,
+            'missing_pots': missing, 'counted_pots': know_pots}
+
+
+def within_budget(items, budget):
+    # items: [(菜, 花费)]；有预算就只留不超预算的，并按花费从少到多排；不限就原样返回
+    if budget is None:
+        return items
+    kept = [x for x in items if x[1]['total'] <= budget]
+    return sorted(kept, key=lambda x: x[1]['total'])

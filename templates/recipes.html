@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
+{% import '_shop.html' as shopui %}
   <title>{{ title }} - 稳厨</title>
 </head>
 <body>
@@ -37,13 +38,22 @@
       <a href="{{ base_path }}?time={{ t|urlencode }}" {% if t == time_filter %}class="on"{% endif %}>{{ t }}</a>
       {% endfor %}
     </p>
+    {% set keep %}{% if q %}q={{ q|urlencode }}&{% endif %}{% if category %}category={{ category|urlencode }}&{% endif %}{% if time_filter %}time={{ time_filter|urlencode }}&{% endif %}{% endset %}
+    <p class="filters budget-filter">
+      本餐预算
+      <a href="{{ base_path }}?{{ keep }}" {% if not budget %}class="on"{% endif %}>不限</a>
+      {% for b in budgets %}
+      <a href="{{ base_path }}?{{ keep }}budget={{ b }}" {% if b == budget %}class="on"{% endif %}>≤¥{{ b }}</a>
+      {% endfor %}
+    </p>
   </div>
-  {% if q or category or time_filter %}
+  <p class="budget-note">🧺 「补齐约」= 还缺的食材{% if know_pots %} + 你家还缺的锅{% else %}（还没填厨房画像，锅具先不算；<a href="/profile">填了就能一起算</a>）{% endif %}，调味料按家里已有。价格为示例，只是估个大概。{% if budget %}已按花费从少到多排。{% endif %}</p>
+  {% if q or category or time_filter or budget %}
   <p class="hint list-note"><span>共找到 <strong>{{ recipes|length }}</strong> 道菜</span><a href="{{ base_path }}">清除筛选 ✕</a></p>
   {% endif %}
   {% if recipes %}
   <ul class="recipe-list">
-    {% for recipe in recipes %}
+    {% for recipe, cost in recipes %}
     <li class="recipe-card">
       <a href="/recipe/{{ recipe['id'] }}">
         {% if recipe['image'] %}<span class="thumb"><img src="{{ recipe['image'] }}" alt="{{ recipe['name'] }}" loading="lazy"></span>{% else %}<span class="thumb empty">🍽️</span>{% endif %}
@@ -52,6 +62,7 @@
       <div class="chips">
         {% if recipe['category'] %}<span class="chip red">{{ recipe['category'] }}</span>{% endif %}
         <span class="chip">⏱ {% if recipe['time_minutes'] %}约 {{ recipe['time_minutes'] }} 分钟{% else %}时间未填{% endif %}</span>
+        <span class="chip amber cost" title="食材 ¥{{ cost.ingredients }}{% if cost.counted_pots %} + 锅具 ¥{{ cost.cookware }}{% endif %}（示例价）">🧺 补齐约 ¥{{ cost.total }}{% if cost.missing_pots %}（含{{ '、'.join(cost.missing_pots) }}）{% endif %}</span>
         <span class="chip green rate">{% if recipe['rate'] is not none %}👍 好评率 {{ recipe['rate'] }}%（{{ recipe['total'] }}人评价）{% else %}暂无评价{% endif %}</span>
       </div>
       {% if recipe['description'] %}<div class="desc">{{ recipe['description'] }}</div>{% endif %}
@@ -59,8 +70,9 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p class="empty-state">🥢 没有找到符合条件的菜谱，换个关键词或分类试试。</p>
+  <p class="empty-state">🥢 没有找到符合条件的菜谱，{% if budget %}把预算放宽一点，或者{% endif %}换个关键词或分类试试。</p>
   {% endif %}
+  {{ shopui.disclaimer(shop_cfg) }}
 </div>
 </body>
 </html>

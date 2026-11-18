@@ -144,7 +144,9 @@ def list_recipes(only_normal, base_path, title):
     category = request.args.get('category', '')  # 分类名
     time_filter = request.args.get('time', '')  # 时间档
     q = request.args.get('q', '').strip()  # 搜索框里的关键词
+    budget = shop.parse_budget(request.args.get('budget'))  # 本餐预算（元），None 表示不限
     query = '''SELECT recipes.id, recipes.name, recipes.description, recipes.time_minutes, recipes.image,
+               recipes.ingredients_list, recipes.tools_list,
                cooking_categories.category AS category
                FROM recipes LEFT JOIN cooking_categories ON recipes.template_id = cooking_categories.template_id'''
     conditions = []
@@ -171,14 +173,22 @@ def list_recipes(only_normal, base_path, title):
         recipes_list = [dict(r) for r in conn.execute(query, params).fetchall()]
         stats = vote_stats(conn)
         categories = [r['category'] for r in conn.execute('SELECT category FROM cooking_categories ORDER BY template_id')]
+        steps_of = {r['id']: conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (r['id'],)).fetchall()
+                    for r in recipes_list}
     finally:
         conn.close()
-    for r in recipes_list:  # 把好评率和人数挂到每道菜上
+    catalog = shop.load_shop()
+    mine = user_cookware(current_user())
+    priced = []
+    for r in recipes_list:  # 把好评率和人数挂到每道菜上，再算「补齐花费」
         v = stats.get(r['id'], {'likes': 0, 'total': 0, 'rate': None})
         r.update(v)
-    return render_template('recipes.html', recipes=recipes_list, base_path=base_path, title=title,
-                           categories=categories, time_filters=TIME_FILTERS,
-                           q=q, category=category, time_filter=time_filter)
+        priced.append((r, shop.meal_cost(r, steps_of[r['id']], mine, catalog, know_pots=bool(mine))))
+    priced = shop.within_budget(priced, budget)  # 选了预算：超预算的不显示，按花费从少到多排
+    return render_template('recipes.html', recipes=priced, base_path=base_path, title=title,
+                           categories=categories, time_filters=TIME_FILTERS, budgets=shop.BUDGETS,
+                           q=q, category=category, time_filter=time_filter, budget=budget,
+                           know_pots=bool(mine), shop_cfg=catalog)
 # 总表：全部菜谱，不管有没有被质疑
 @app.route('/all')
 def all_recipes():
@@ -360,8 +370,11 @@ def profile():  # 处理画像的函数
 def recommend():  # 处理推荐页的函数
     user = current_user()
     my_cookware = user_cookware(user)
+    budget = shop.parse_budget(request.args.get('budget'))  # 本餐预算（元），None 表示不限
     if not user or not my_cookware:  # 没填画像或没选锅具：不跳走，页面上说明一下
-        return render_template('recommend.html', need_profile=True, can_make=[], cannot_make=[], user_cookware=my_cookware)
+        return render_template('recommend.html', need_profile=True, can_make=[], cannot_make=[], user_cookware=my_cookware,
+                               budget=budget, budgets=shop.BUDGETS)
+    catalog = shop.load_shop()
     conn = get_db()
     try:
         recipes = conn.execute('SELECT * FROM recipes ORDER BY id').fetchall()
@@ -369,15 +382,20 @@ def recommend():  # 处理推荐页的函数
         cannot_make = []  # 做不了的菜，放这里
         for recipe in recipes:  # 一道一道过所有菜
             steps = conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (recipe['id'],)).fetchall()
-            # 这道菜要用、但用户没有的锅（括号里的补充说明不算，例如「蒸锅拿掉蒸笼就行」）
-            missing = [pot for pot in shop.pots_needed(shop.recipe_tools_text(recipe, steps)) if pot not in my_cookware]
-            if missing:
-                cannot_make.append((recipe, missing))
+            # 这道菜要用、但用户没有的锅（括号里的补充说明不算，例如「蒸锅拿掉蒸笼就行」）+ 补齐要花多少
+            cost = shop.meal_cost(recipe, steps, my_cookware, catalog)
+            if cost['missing_pots']:
+                cannot_make.append((recipe, cost))
             else:
-                can_make.append(recipe)
+                can_make.append((recipe, cost))
     finally:
         conn.close()
-    return render_template('recommend.html', need_profile=False, can_make=can_make, cannot_make=cannot_make, user_cookware=my_cookware)
+    hidden = len(can_make) + len(cannot_make)
+    can_make = shop.within_budget(can_make, budget)  # 选了预算：只留补齐花费不超预算的，便宜的排前面
+    cannot_make = shop.within_budget(cannot_make, budget)
+    hidden -= len(can_make) + len(cannot_make)
+    return render_template('recommend.html', need_profile=False, can_make=can_make, cannot_make=cannot_make,
+                           user_cookware=my_cookware, budget=budget, budgets=shop.BUDGETS, hidden=hidden, shop_cfg=catalog)
 def get_categories():
     # 从数据库读 8 个分类，上传和编辑的下拉框用
     conn = get_db()

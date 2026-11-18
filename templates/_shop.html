@@ -1,6 +1,6 @@
 {# 导购用的小组件：示例声明、商品卡片 #}
 {% macro disclaimer(catalog) %}
-<p class="sample-note">⚠️ {{ catalog.disclaimer }}</p>
+<p class="sample-note partner">🤝 {{ catalog.disclaimer }}</p>
 {% endmacro %}
 
 {% macro product_card(key, item, kind, source, recipe_id, catalog) %}
@@ -9,7 +9,7 @@
     <strong>{{ item.name }}</strong>
     {% if item.is_sample %}<span class="badge">示例商品</span>{% endif %}
   </div>
-  <div class="meta">用来替代：{{ key }} · 参考价 ¥{{ item.price }}（仅供参考）</div>
+  <div class="meta">用来替代：{{ key }} · 示例价 ¥{{ item.price }}</div>
   <p class="why">为什么适合小白：{{ item.why }}</p>
   <p class="buy">
     {% for o in item.offers %}

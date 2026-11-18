@@ -623,3 +623,11 @@ details > summary::after {
   font-size: 22px; line-height: 1; font-weight: 400; transform: rotate(90deg);
 }
 details[open] > summary::after { transform: rotate(-90deg); }
+
+/* ---------- 本餐预算 ---------- */
+.budget-note { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.budget-note a { font-weight: 600; }
+.link-list .cost { display: block; margin-top: 2px; font-weight: 600; font-size: 13px; color: #9A5B07; }
+.recipe-card .chip.cost { white-space: nowrap; }
+.page > .sample-note.partner, .sample-note.partner { margin-top: 18px; }
+.stat-note { margin: 0 0 14px; }

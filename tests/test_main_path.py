@@ -249,7 +249,7 @@ try:
     r = anon.get('/recipe/5')
     h = text(r)
     check('未填画像：详情不拦人，只提示填锅具', r.status_code == 200 and '填一下家里的锅具，就能看到缺什么' in h and '还缺' not in h)
-    check('未填画像也能看采购清单', '一键备齐食材' in h and '示例商品、价格仅供参考' in h)
+    check('未填画像也能看采购清单', '一键备齐食材' in h and '潜在合作示意，未签约，暂不下单' in h)
     shopper = app.test_client()
     shopper.post('/profile', data={'nickname': '只有炒锅', 'cookware': ['炒锅']})
     h = text(shopper.get('/recipe/5'))
@@ -295,6 +295,57 @@ try:
     check('点击记进库（4 次有效点击）', con.execute('SELECT COUNT(*) FROM shop_clicks').fetchone()[0] == 4)
     check('详情浏览也记进库', con.execute('SELECT COUNT(*) FROM recipe_views').fetchone()[0] > 0)
     con.close()
+
+    print('12b. 本餐预算：按补齐花费筛选 / 排序')
+    check('预算只认 30 / 50 / 100，乱填当不限',
+          shopmod.parse_budget('50') == 50 and all(shopmod.parse_budget(v) is None for v in (None, '', 'abc', '-1', '999', '50.5')))
+    con = sqlite3.connect(TEST_DB)
+    con.row_factory = sqlite3.Row
+    r12 = con.execute('SELECT * FROM recipes WHERE id = 12').fetchone()
+    s12 = con.execute('SELECT tools FROM recipe_steps WHERE recipe_id = 12').fetchall()
+    con.close()
+    ing12 = sum(x['price'] for x in shopmod.shopping_list(r12['ingredients_list'], cfg) if not x['at_home'])
+    cost = shopmod.meal_cost(r12, s12, ['炒锅'], cfg)
+    check('补齐花费 = 还缺的食材 + 还缺的锅（蛋炒饭缺平底锅）',
+          cost['missing_pots'] == ['平底锅'] and cost['ingredients'] == ing12
+          and cost['total'] == ing12 + cfg['cookware']['平底锅']['price'], cost)
+    cost = shopmod.meal_cost(r12, s12, [], cfg, know_pots=False)
+    check('没填画像：锅具先不算', cost['total'] == ing12 and cost['missing_pots'] == [] and not cost['counted_pots'])
+    check('锅都有：只算食材', shopmod.meal_cost(r12, s12, ['平底锅'], cfg)['total'] == ing12)
+    h = text(anon.get('/all'))
+    costs = [int(x) for x in re.findall(r'补齐约 ¥(\d+)', h)]
+    check('列表页每道菜都显示补齐花费', len(costs) == len(recipe_links(h)) and len(costs) >= 12, len(costs))
+    check('列表页有本餐预算档位和说明', '本餐预算' in h and 'budget=30' in h and 'budget=100' in h and '锅具先不算' in h and '价格为示例' in h)
+    h = text(anon.get('/all?budget=30'))
+    costs = [int(x) for x in re.findall(r'补齐约 ¥(\d+)', h)]
+    ids = recipe_links(h)
+    check('选 ≤¥30：只剩不超预算的，按花费从少到多', costs and all(c <= 30 for c in costs) and costs == sorted(costs), costs)
+    check('≤¥30：蛋炒饭在，龙虾面不在', '12' in ids and '8' not in ids, ids)
+    check('预算档高亮', 'budget=30" class="on"' in h)
+    check('预算和搜索能一起用（档位链接保留关键词）', 'href="/all?q=%E9%B8%A1&amp;budget=30"' in text(anon.get('/all?q=鸡'))
+          or 'href="/all?q=%E9%B8%A1&budget=30"' in text(anon.get('/all?q=鸡')))
+    ids = recipe_links(text(shopper.get('/all?budget=30')))
+    check('只有炒锅的人：蛋炒饭要补平底锅超预算，赛螃蟹在', '12' not in ids and '9' in ids, ids)
+    check('放心菜谱也能按预算筛', anon.get('/recipes?budget=50').status_code == 200 and '补齐约' in text(anon.get('/recipes?budget=50')))
+    h = text(anon.get('/all?budget=evil'))
+    check('乱填预算不报错，当不限', len(recipe_links(h)) >= 12)
+    r = shopper.get('/recommend?budget=30')
+    h = text(r)
+    ids = recipe_links(h)
+    check('推荐页 ≤¥30：赛螃蟹在、蛋炒饭不在，并说明藏了几道', r.status_code == 200 and '9' in ids and '12' not in ids and '先藏起来了' in h, ids)
+    h = text(shopper.get('/recommend'))
+    check('推荐页不限预算：缺锅的菜写清锅和食材各多少', '本餐预算' in h and '补齐约 ¥' in h and '（锅 ¥59 + 食材 ¥' in h)
+    check('推荐页没画像也不报错', anon.get('/recommend?budget=50').status_code == 200)
+
+    print('12c. 合作声明 / 统计口径')
+    notice = '潜在合作示意，未签约，暂不下单；按钮只跳到平台公开搜索页，价格为示例'
+    pages = {'列表': '/all', '推荐': '/recommend', '详情': '/recipe/5', '入门备厨': '/starter', '统计': '/stats'}
+    check('各页都显示新的合作声明', all(notice in text(shopper.get(u)) for u in pages.values()),
+          [k for k, u in pages.items() if notice not in text(shopper.get(u))])
+    check('首页底部也写清未签约、暂不下单', '未签约，暂不下单' in text(anon.get('/')))
+    check('旧的「价格仅供参考」示例声明都换掉了', all('示例商品、价格仅供参考' not in text(shopper.get(u)) for u in pages.values()))
+    h = text(shopper.get('/stats'))
+    check('统计页写明是演示点击、不是真实用户数据、只展示口径', '不是真实用户数据' in h and '口径' in h)
 
     print('13. 菜品图（AI 生成，已压缩）')
     con = sqlite3.connect(TEST_DB)

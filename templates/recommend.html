@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 {% include '_head.html' %}
+{% import '_shop.html' as shopui %}
   <title>为你推荐 - 稳厨</title>
 </head>
 <body>
@@ -13,27 +14,36 @@
     <p class="hint">家里一口锅都没有？先看 <a href="/starter">入门备厨</a>。</p>
     {% else %}
     <p class="sample-note green">🍳 你有的锅具：{{ '、'.join(user_cookware) }}（<a href="/profile?edit=1">改一改</a>）</p>
+    <p class="filters budget-filter">
+      本餐预算
+      <a href="/recommend" {% if not budget %}class="on"{% endif %}>不限</a>
+      {% for b in budgets %}
+      <a href="/recommend?budget={{ b }}" {% if b == budget %}class="on"{% endif %}>≤¥{{ b }}</a>
+      {% endfor %}
+    </p>
+    <p class="budget-note">🧺 「补齐约」= 还缺的食材 + 还缺的锅，调味料按家里已有。价格为示例，只是估个大概。{% if budget %}超过 ¥{{ budget }} 的 {{ hidden }} 道先藏起来了，剩下的按花费从少到多排。{% endif %}</p>
     <h2>能做的</h2>
     {% if can_make %}
     <ul class="link-list ok">
-        {% for recipe in can_make %}
-        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}</a></li>
+        {% for recipe, cost in can_make %}
+        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}<span class="cost">补齐约 ¥{{ cost.total }}</span></a></li>
         {% endfor %}
     </ul>
     {% else %}
-    <p>暂时没有你现在的锅具就能做的菜。</p>
+    <p>{% if budget %}这个预算内暂时没有你现在的锅具就能做的菜，<a href="/recommend">放宽预算看看</a>。{% else %}暂时没有你现在的锅具就能做的菜。{% endif %}</p>
     {% endif %}
     <p class="hint">想多做几道？<a href="/starter">入门备厨：补哪件锅最划算</a></p>
     <h2>缺锅具</h2>
     {% if cannot_make %}
     <ul class="link-list lack">
-        {% for recipe, missing in cannot_make %}
-        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}<span class="miss">（缺：{{ '、'.join(missing) }}）</span></a></li>
+        {% for recipe, cost in cannot_make %}
+        <li><a href="/recipe/{{ recipe['id'] }}">{{ recipe['name'] }}<span class="miss">（缺：{{ '、'.join(cost.missing_pots) }}）</span><span class="cost">补齐约 ¥{{ cost.total }}（锅 ¥{{ cost.cookware }} + 食材 ¥{{ cost.ingredients }}）</span></a></li>
         {% endfor %}
     </ul>
     {% else %}
-    <p>没有缺锅具的菜，全都能做！</p>
+    <p>{% if budget %}这个预算内没有缺锅具的菜。{% else %}没有缺锅具的菜，全都能做！{% endif %}</p>
     {% endif %}
+    {{ shopui.disclaimer(shop_cfg) }}
     {% endif %}
 </div>
 {% include '_nav.html' %}
