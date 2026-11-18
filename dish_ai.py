@@ -27,6 +27,16 @@ SYSTEM_PROMPT = (
 )
 
 
+class AIReply(str):
+    """模型回的文字（当普通字符串用），顺带记下这次的用量 usage 和接口回报的模型名"""
+
+    def __new__(cls, content, usage=None, model=None):
+        obj = super().__new__(cls, content)
+        obj.usage = usage if isinstance(usage, dict) else {}
+        obj.model = model
+        return obj
+
+
 class AIError(Exception):
     """AI 这一层任何问题（没密钥、网络、超时、返回不是合格 JSON）都抛这个，外面统一走规则兜底"""
 
@@ -58,7 +68,7 @@ def call_deepseek(dish, description, api_key=None, timeout=TIMEOUT, opener=None)
     except ValueError:
         raise AIError('AI 返回的不是 JSON') from None
     try:
-        return payload['choices'][0]['message']['content']
+        return AIReply(payload['choices'][0]['message']['content'], payload.get('usage'), payload.get('model'))
     except (KeyError, IndexError, TypeError):
         raise AIError('AI 返回格式不对') from None
 
@@ -133,7 +143,8 @@ def parse_ai_json(text):
     return result
 
 
-def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=True, caller=None):
+def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=True, caller=None, provider=None):
+    # provider：可选，(菜名, 说明) → 已校验的 AI 初稿 dict（app 里用它接上缓存和限额）；不给就直接调 caller/call_deepseek
     # 主流程：先试 AI，再让规则拍板锅具；AI 不可用就纯规则。返回页面要的全部数据
     dish = _clean_name(dish)
     description = (description or '').strip()[:100]
@@ -143,7 +154,7 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
         use_ai = False
     if use_ai:
         try:
-            ai = parse_ai_json((caller or call_deepseek)(dish, description))
+            ai = provider(dish, description) if provider else parse_ai_json((caller or call_deepseek)(dish, description))
         except AIError as e:
             ai_error = str(e)
     if rules['site_id']:
@@ -183,7 +194,7 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
     rows = shop.shopping_list(recipe['ingredients_list'], catalog) if buy else []
     return {
         'dish': dish, 'description': description, 'mode': mode, 'ai_error': ai_error,
-        'matched': rules['matched'], 'site_id': rules['site_id'], 'main': main, 'side': side, 'season': season, 'methods': methods,
+        'matched': rules['matched'], 'site_id': rules['site_id'], 'cached': bool(ai and ai.get('_cached')), 'main': main, 'side': side, 'season': season, 'methods': methods,
         'cookware': cookware, 'dropped': [d for d in dropped if d], 'tips': tips,
         'have': [p for p in pot_names if p in owned], 'missing': [p for p in pot_names if p not in owned],
         'know_pots': know_pots, 'cost': cost, 'rows': rows,

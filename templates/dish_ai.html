@@ -24,6 +24,7 @@
         <label class="check"><input type="checkbox" name="rules_only" value="1" {% if rules_only %}checked{% endif %}> 只用稳厨经验库（不调 AI，断网也能演示）</label>
         <button type="submit" class="btn btn-primary btn-lg" id="ai-submit">开始拆菜 →</button>
       </div>
+      <p class="meta ai-quota">AI 拆菜每人每天 {{ per_ip }} 次，全站每天也有总次数；之前拆过的菜直接用存下的结果，不占次数。次数用完会自动换成稳厨经验库。</p>
       <p class="examples">试试：{% for e in examples %}<a href="#" class="chip" data-dish="{{ e }}">{{ e }}</a>{% endfor %}</p>
     </form>
   </div>
@@ -34,10 +35,11 @@
       <h2>「{{ result.dish }}」拆解结果</h2>
       {% if result.mode == 'AI+规则' %}
       <span class="mode-tag ai">✨ AI+规则：AI 出初稿，稳厨经验库核对锅具</span>
+      {% if result.cached %}<span class="meta">♻️ 这道菜之前拆过，直接用存下的结果，没再调 AI</span>{% endif %}
       {% elif result.mode == '稳厨菜谱' %}
       <span class="mode-tag ai">📖 稳厨菜谱：站内已有这道菜，食材、锅具按菜谱来</span>
       {% else %}
-      <span class="mode-tag rule">🧭 规则兜底：这次没用 AI{% if result.ai_error %}（{{ result.ai_error }}）{% endif %}，只靠稳厨经验库</span>
+      <span class="mode-tag rule">🧭 规则兜底：{% if result.ai_error %}{{ result.ai_error }}{% if '稳厨经验库' not in result.ai_error %}，先用稳厨经验库{% endif %}{% else %}这次没用 AI，只靠稳厨经验库{% endif %}</span>
       {% endif %}
     </div>
     {% if result.matched %}<p class="meta">参考了：{{ result.matched }}{% if result.site_id %} · <a href="/recipe/{{ result.site_id }}">看完整菜谱和步骤 →</a>{% endif %}</p>{% endif %}

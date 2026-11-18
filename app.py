@@ -1,9 +1,11 @@
 from flask import Flask, render_template, request, session, redirect, flash, send_from_directory#引入网站和显示页面的功能，flash 用来给下一页带一句提示
 import os#拼路径、读环境变量
+import json#AI 拆菜记录里存的是 JSON
 import uuid#给上传的图片起一个不会重名的文件名
 import sqlite3#引入sql数据库
 import shop#导购：缺的锅、采购清单、入门备厨（商品数据在 shop_items.json）
 import dish_ai#AI 拆菜：DeepSeek 初稿 + 稳厨经验库（dish_rules.py）核对
+import dish_store#AI 拆菜的记录（也当缓存）和调用限额
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -88,6 +90,8 @@ def init_db():
             user_id INTEGER,
             created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )''')
+        # dish_breakdowns（拆过的菜）、dish_ai_calls（AI 调用次数）：表结构说明见 dish_store.py
+        dish_store.init_tables(conn)
         # 提交建表
         conn.commit()
     finally:
@@ -668,6 +672,34 @@ def known_recipes_for_rules(conn):
                        'steps': [{'title': s['title'] or '', 'action': s['action'] or '', 'tools': s['tools'] or ''} for s in steps],
                        'steps_text': ' '.join((s['title'] or '') + ' ' + (s['action'] or '') for s in steps)})
     return result
+def client_ip():
+    # Render 前面有一层代理，真实访客 IP 在 X-Forwarded-For 的第一个；本机直连就用 remote_addr
+    fwd = request.headers.get('X-Forwarded-For', '')
+    return fwd.split(',')[0].strip() or request.remote_addr or 'unknown'
+def ai_draft_provider(visitor):
+    # 给 dish_ai.analyze 用：先查拆过的记录（免费），再看限额，最后才真正调 DeepSeek，成功就存一条记录
+    def provide(dish, description):
+        conn = get_db()
+        try:
+            if not description:
+                hit = dish_store.find_cached(conn, dish)
+                if hit:
+                    data = dish_ai.parse_ai_json(json.dumps(hit[1], ensure_ascii=False))  # 存的也再校验一遍
+                    data['_cached'] = True
+                    return data
+            reason = dish_store.limit_reason(conn, visitor)
+            if reason:
+                raise dish_ai.AIError(reason)
+            call_id = dish_store.log_call(conn, visitor)
+            reply = dish_ai.call_deepseek(dish, description)
+            data = dish_ai.parse_ai_json(reply)
+            dish_store.mark_ok(conn, call_id)
+            dish_store.save_breakdown(conn, dish, description, data, dish_ai.MODEL,
+                                      getattr(reply, 'usage', None), getattr(reply, 'model', None))
+            return data
+        finally:
+            conn.close()
+    return provide
 @app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：输入一道菜，拆出食材、做法、锅具、缺什么、花多少
 def dish_ai_page():
     form = request.form if request.method == 'POST' else request.args
@@ -685,9 +717,11 @@ def dish_ai_page():
             known = known_recipes_for_rules(conn)
         finally:
             conn.close()
-        result = dish_ai.analyze(dish, description, mine, bool(mine), known, catalog, use_ai=not rules_only)
+        visitor = dish_store.visitor_id(client_ip(), app.secret_key)
+        result = dish_ai.analyze(dish, description, mine, bool(mine), known, catalog, use_ai=not rules_only,
+                                 provider=ai_draft_provider(visitor))
     return render_template('dish_ai.html', result=result, dish=dish, description=description, rules_only=rules_only,
-                           mine=mine, shop_cfg=catalog, examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
+                           mine=mine, shop_cfg=catalog, per_ip=dish_store.per_ip_daily(), examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
 SHOP_SOURCES = {'detail': '详情页·缺的锅', 'tool': '详情页·小工具', 'list': '采购清单', 'starter': '入门备厨'}
 @app.route('/go')  # 购买按钮先经过这里：记一次点击，再跳去平台页面
 def go_buy():

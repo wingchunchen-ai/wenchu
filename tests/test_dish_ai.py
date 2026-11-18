@@ -231,6 +231,169 @@ try:
         dish_ai.call_deepseek = orig
     h = c.post('/dish-ai', data={'dish': '<script>x</script>'}).get_data(as_text=True)
     check('菜名里的标签不会原样出现在页面上', '<script>x</script>' not in h)
+    print('7. 限额 / 缓存 / 拆菜记录')
+    import sqlite3
+    from datetime import datetime, timezone
+    import dish_store
+    os.environ.pop('DISH_AI_DAILY_CAP', None)
+    os.environ.pop('DISH_AI_PER_IP_DAILY', None)
+    calls = []
+    USAGE = {'prompt_tokens': 420, 'completion_tokens': 180, 'total_tokens': 600, 'prompt_cache_hit_tokens': 384, 'prompt_cache_miss_tokens': 36}
+
+    def fake_api(dish, desc):
+        calls.append(dish)
+        return dish_ai.AIReply(GOOD, USAGE, 'deepseek-v4-flash')
+
+    def db():
+        con = sqlite3.connect(TEST_DB)
+        con.row_factory = sqlite3.Row
+        return con
+
+    def post(dish, ip, desc='', **kw):
+        return c.post('/dish-ai', data={'dish': dish, 'description': desc, **kw},
+                      headers={'X-Forwarded-For': ip}).get_data(as_text=True)
+
+    check('菜名归一：空格、标点、全角都算同一道菜',
+          dish_store.normalize_dish(' 宫保 鸡丁！') == dish_store.normalize_dish('宫保鸡丁') == dish_store.normalize_dish('宫保鸡丁 '))
+    check('默认限额：每 IP 每天 5 次、全站每天 100 次', dish_store.per_ip_daily() == 5 and dish_store.daily_cap() == 100)
+    os.environ['DISH_AI_DAILY_CAP'] = 'abc'
+    os.environ['DISH_AI_PER_IP_DAILY'] = '-3'
+    check('环境变量写错用默认值，负数当 0', dish_store.daily_cap() == 100 and dish_store.per_ip_daily() == 0)
+    os.environ['DISH_AI_DAILY_CAP'] = '7'
+    os.environ['DISH_AI_PER_IP_DAILY'] = '3'
+    check('环境变量能改限额', dish_store.daily_cap() == 7 and dish_store.per_ip_daily() == 3)
+    os.environ.pop('DISH_AI_DAILY_CAP')
+    os.environ.pop('DISH_AI_PER_IP_DAILY')
+    check('「每天」按伦敦日期：夏令时 6/30 23:30 UTC 已经是伦敦 7/1',
+          dish_store.london_day(datetime(2026, 6, 30, 23, 30, tzinfo=timezone.utc)) == '2026-07-01')
+    check('冬令时 11/18 23:30 UTC 还是伦敦 11/18',
+          dish_store.london_day(datetime(2026, 11, 18, 23, 30, tzinfo=timezone.utc)) == '2026-11-18')
+    con = db()
+    cols = [r['name'] for r in con.execute('PRAGMA table_info(dish_breakdowns)')]
+    cols2 = [r['name'] for r in con.execute('PRAGMA table_info(dish_ai_calls)')]
+    con.close()
+    check('dish_breakdowns 表字段齐全', cols == ['id', 'dish_key', 'dish_name', 'description', 'result_json', 'mode', 'model',
+                                            'api_model', 'prompt_tokens', 'completion_tokens', 'cache_hit_tokens', 'cache_miss_tokens',
+                                            'total_tokens', 'created_at'], cols)
+    check('dish_ai_calls 表字段齐全（存 IP 哈希和伦敦日期）', cols2 == ['id', 'visitor', 'day', 'ok', 'created_at'], cols2)
+
+    con = db()
+    con.execute('DELETE FROM dish_breakdowns')  # 前面页面测试留下的记录先清掉，从零开始数
+    con.execute('DELETE FROM dish_ai_calls')
+    con.commit()
+    con.close()
+    orig = dish_ai.call_deepseek
+    dish_ai.call_deepseek = fake_api
+    try:
+        h = post('宫保鸡丁', '1.1.1.1')
+        check('第一次：真调 AI，标 AI+规则', len(calls) == 1 and 'AI+规则' in h and '没再调 AI' not in h)
+        con = db()
+        rec = con.execute('SELECT * FROM dish_breakdowns').fetchall()
+        con.close()
+        check('成功的拆菜存成一条记录', len(rec) == 1)
+        r0 = rec[0]
+        check('记录：归一菜名、原菜名、空说明、模式、模型', r0['dish_key'] == '宫保鸡丁' and r0['dish_name'] == '宫保鸡丁'
+              and r0['description'] == '' and r0['mode'] == 'AI+规则' and r0['model'] == 'deepseek-v4-flash')
+        check('记录：用量都存了', (r0['prompt_tokens'], r0['completion_tokens'], r0['cache_hit_tokens'], r0['cache_miss_tokens'], r0['total_tokens']) == (420, 180, 384, 36, 600))
+        stored = json.loads(r0['result_json'])
+        check('记录：存的是清洗后的 JSON（AI 初稿，结构固定）', set(stored) == {'main', 'side', 'season', 'methods', 'cookware', 'tips'}
+              and stored['methods'] == ['炒'])
+        check('记录有时间', bool(r0['created_at']))
+        h = post('宫保鸡丁', '1.1.1.1')
+        check('同一道菜再拆：用存下的结果，不调 AI，页面写明', len(calls) == 1 and 'AI+规则' in h and '没再调 AI' in h)
+        post(' 宫保 鸡丁！', '9.9.9.9')
+        check('写法不同（空格、标点）也命中缓存', len(calls) == 1)
+        con = db()
+        n_calls = con.execute('SELECT COUNT(*) FROM dish_ai_calls').fetchone()[0]
+        n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        con.close()
+        check('缓存命中不算次数、不重复存记录', n_calls == 1 and n_rec == 1)
+        post('宫保鸡丁', '1.1.1.1', desc='不要太辣')
+        con = db()
+        last = con.execute('SELECT * FROM dish_breakdowns ORDER BY id DESC LIMIT 1').fetchone()
+        con.close()
+        check('写了补充说明：不走缓存，真调一次，记录里存了说明', len(calls) == 2 and last['description'] == '不要太辣')
+        post('宫保鸡丁', '1.1.1.1')
+        check('带说明的记录不会被当成空说明的缓存（仍命中最早那条，不调 AI）', len(calls) == 2)
+
+        before = len(calls)
+        for i in range(5):
+            post(f'测试菜{i}', '2.2.2.2')
+        check('每个 IP 每天 5 次以内都真调 AI', len(calls) == before + 5)
+        h = post('测试菜99', '2.2.2.2')
+        check('第 6 次：不调 AI，规则兜底并写明今天次数用完', len(calls) == before + 5 and '规则兜底' in h and '今天的 5 次 AI 拆菜已用完' in h)
+        h = post('宫保鸡丁', '2.2.2.2')
+        check('次数用完的人，拆过的菜照样能用（缓存不占次数）', 'AI+规则' in h and '没再调 AI' in h and len(calls) == before + 5)
+        post('测试菜100', '3.3.3.3, 10.0.0.1')
+        check('换一个 IP 照样能用', len(calls) == before + 6)
+        post('测试菜101', '3.3.3.3, 10.0.0.2')
+        con = db()
+        vs = {r[0] for r in con.execute("SELECT visitor FROM dish_ai_calls ORDER BY id DESC LIMIT 2")}
+        con.close()
+        check('X-Forwarded-For 只认第一个 IP（后面的代理不同也算同一人）', len(vs) == 1)
+        con = db()
+        raw_ip = con.execute("SELECT COUNT(*) FROM dish_ai_calls WHERE visitor LIKE '%3.3.3.3%'").fetchone()[0]
+        con.close()
+        check('不存原始 IP，只存哈希', raw_ip == 0)
+        os.environ['DISH_AI_PER_IP_DAILY'] = '7'
+        post('测试菜102', '2.2.2.2')
+        check('把 DISH_AI_PER_IP_DAILY 调大，同一个 IP 又能用', len(calls) == before + 8)
+        os.environ.pop('DISH_AI_PER_IP_DAILY')
+
+        con = db()
+        v4 = dish_store.visitor_id('4.4.4.4', wenchu.app.secret_key)
+        for _ in range(5):
+            con.execute("INSERT INTO dish_ai_calls (visitor, day, ok) VALUES (?, '2000-01-01', 1)", (v4,))
+        con.commit()
+        con.close()
+        n = len(calls)
+        post('测试菜200', '4.4.4.4')
+        check('昨天（以前）的次数不算今天的', len(calls) == n + 1)
+
+        con = db()
+        today_total = con.execute('SELECT COUNT(*) FROM dish_ai_calls WHERE day = ?', (dish_store.london_day(),)).fetchone()[0]
+        con.close()
+        os.environ['DISH_AI_DAILY_CAP'] = str(today_total)
+        n = len(calls)
+        h = post('测试菜300', '5.5.5.5')
+        check('全站每天上限到了：新访客也不调 AI，写明全站次数用完', len(calls) == n and '今天全站的 AI 次数已用完' in h)
+        h = post('宫保鸡丁', '5.5.5.5')
+        check('全站上限到了，拆过的菜照样能用', '没再调 AI' in h and len(calls) == n)
+        os.environ['DISH_AI_DAILY_CAP'] = '0'
+        post('测试菜301', '6.6.6.6')
+        check('DISH_AI_DAILY_CAP=0 等于关掉 AI', len(calls) == n)
+        os.environ.pop('DISH_AI_DAILY_CAP')
+
+        dish_ai.call_deepseek = lambda d, x: (calls.append(d), dish_ai.AIReply('乱七八糟', USAGE))[1]
+        con = db()
+        n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        n_call = con.execute('SELECT COUNT(*) FROM dish_ai_calls').fetchone()[0]
+        con.close()
+        h = post('测试菜400', '7.7.7.7')
+        con = db()
+        row = con.execute('SELECT ok FROM dish_ai_calls ORDER BY id DESC LIMIT 1').fetchone()
+        n_rec2 = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        n_call2 = con.execute('SELECT COUNT(*) FROM dish_ai_calls').fetchone()[0]
+        con.close()
+        check('AI 回了坏 JSON：算一次调用（标失败），不存记录，页面规则兜底',
+              n_call2 == n_call + 1 and row['ok'] == 0 and n_rec2 == n_rec and '规则兜底' in h)
+        dish_ai.call_deepseek = fake_fail
+        post('测试菜401', '7.7.7.7')
+        con = db()
+        n_call3 = con.execute('SELECT COUNT(*) FROM dish_ai_calls').fetchone()[0]
+        con.close()
+        check('AI 超时也算一次真实请求', n_call3 == n_call2 + 1)
+        dish_ai.call_deepseek = fake_api
+        n = len(calls)
+        post('蛋炒饭', '8.8.8.8')
+        check('站内菜不调 AI，也不占次数', len(calls) == n)
+        h = c.get('/dish-ai').get_data(as_text=True)
+        check('页面写明每人每天 5 次、拆过的菜不占次数', '每人每天 5 次' in h and '不占次数' in h)
+    finally:
+        dish_ai.call_deepseek = orig
+    reply = dish_ai.call_deepseek('x', '', api_key='sk-test-not-real', opener=lambda req, timeout: FakeResp(json.dumps(
+        {'model': 'deepseek-v4-flash', 'usage': USAGE, 'choices': [{'message': {'content': GOOD}}]}).encode('utf-8')))
+    check('调 DeepSeek 时把 usage 和模型名带回来', reply.usage == USAGE and reply.model == 'deepseek-v4-flash' and reply == GOOD)
 finally:
     shutil.rmtree(TMP, ignore_errors=True)
 
