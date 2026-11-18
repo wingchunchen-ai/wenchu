@@ -255,10 +255,10 @@ try:
 
     check('菜名归一：空格、标点、全角都算同一道菜',
           dish_store.normalize_dish(' 宫保 鸡丁！') == dish_store.normalize_dish('宫保鸡丁') == dish_store.normalize_dish('宫保鸡丁 '))
-    check('默认限额：每 IP 每天 5 次、全站每天 100 次', dish_store.per_ip_daily() == 5 and dish_store.daily_cap() == 100)
+    check('默认限额：每 IP 每天 5 次、全站每天 200 次', dish_store.per_ip_daily() == 5 and dish_store.daily_cap() == 200)
     os.environ['DISH_AI_DAILY_CAP'] = 'abc'
     os.environ['DISH_AI_PER_IP_DAILY'] = '-3'
-    check('环境变量写错用默认值，负数当 0', dish_store.daily_cap() == 100 and dish_store.per_ip_daily() == 0)
+    check('环境变量写错用默认值，负数当 0', dish_store.daily_cap() == 200 and dish_store.per_ip_daily() == 0)
     os.environ['DISH_AI_DAILY_CAP'] = '7'
     os.environ['DISH_AI_PER_IP_DAILY'] = '3'
     check('环境变量能改限额', dish_store.daily_cap() == 7 and dish_store.per_ip_daily() == 3)

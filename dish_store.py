@@ -31,7 +31,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 DEFAULT_PER_IP_DAILY = 5    # 每个 IP 每天（伦敦日期）最多真正调几次 AI，环境变量 DISH_AI_PER_IP_DAILY
-DEFAULT_DAILY_CAP = 100     # 全站每天最多真正调几次 AI，环境变量 DISH_AI_DAILY_CAP
+DEFAULT_DAILY_CAP = 200     # 全站每天最多真正调几次 AI，环境变量 DISH_AI_DAILY_CAP
 LONDON = ZoneInfo('Europe/London')
 
 
