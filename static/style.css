@@ -326,3 +326,4 @@ details.shopping summary { font-size: 20px; color: #b4471c; }
 .detail-img { aspect-ratio: 4 / 3; object-fit: cover; }
 .rec-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rec-thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; }
+.buy-btn { white-space: nowrap; }
