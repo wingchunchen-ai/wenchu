@@ -668,3 +668,15 @@ details[open] > summary::after { transform: rotate(-90deg); }
   .ai-hero { padding: 14px 16px 18px; }
   .ai-hero h1 { font-size: 22px; }
 }
+
+/* ---------- AI 拆菜 · 输入联想 ---------- */
+.suggest-wrap { position: relative; display: block; }
+.suggest-box { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; }
+.suggest-item { display: flex; align-items: center; gap: 4px; padding: 10px 14px; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
+.suggest-item:last-child { border-bottom: 0; }
+.suggest-item:hover, .suggest-item:focus { background: var(--primary-50); text-decoration: none; color: var(--ink); }
+.suggest-item .tag { color: var(--herb); font-weight: 600; font-size: 14px; }
+.suggest-item .kind { margin-left: auto; font-size: 12px; padding: 1px 8px; border-radius: var(--pill); background: var(--bg-deep); color: var(--ink-2); }
+.suggest-item .kind.site { background: var(--herb-50); color: var(--herb); }
+.suggest-item .kind.cached { background: var(--amber-50); color: #9A5B07; }
+.ai-form .suggest-hint { margin: -6px 0 0; }

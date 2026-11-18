@@ -15,8 +15,13 @@
     <p class="hint">AI 先读懂这道菜（DeepSeek 出初稿），再由稳厨经验库按做法核对锅具、补上漏掉的必备锅具，最后对照你的厨房算出还缺什么、大概花多少。</p>
     <form method="post" action="/dish-ai" class="ai-form" id="dish-ai-form">
       <label>菜名 <span class="req">*</span>
-        <input type="text" name="dish" maxlength="20" required placeholder="比如：宫保鸡丁" value="{{ dish }}">
+        <span class="suggest-wrap">
+          <input type="text" name="dish" id="dish-input" maxlength="20" required autocomplete="off" placeholder="比如：宫保鸡丁"
+                 value="{{ dish }}" aria-autocomplete="list" aria-controls="dish-suggest">
+          <span class="suggest-box" id="dish-suggest" role="listbox" hidden></span>
+        </span>
       </label>
+      <p class="meta suggest-hint">边打字边联想「稳厨已有」的菜，点一下直接用现成结果（不调 AI）；不点也行，照常提交。</p>
       <label>补充说明（可选）
         <input type="text" name="description" maxlength="100" placeholder="比如：不要太辣、想用空气炸锅" value="{{ description }}">
       </label>
@@ -32,7 +37,7 @@
   {% if result %}
   <div class="ai-result">
     <div class="ai-result-head">
-      <h2>「{{ result.dish }}」拆解结果</h2>
+      <h2>「{{ result.dish }}」拆解结果{% if result.dish != result.user_dish %}<small class="meta">（你写的是「{{ result.user_dish }}」）</small>{% endif %}</h2>
       {% if result.mode == 'AI+规则' %}
       <span class="mode-tag ai">✨ AI+规则：AI 出初稿，稳厨经验库核对锅具</span>
       {% if result.cached %}<span class="meta">♻️ 这道菜之前拆过，直接用存下的结果，没再调 AI</span>{% endif %}
@@ -42,6 +47,14 @@
       <span class="mode-tag rule">🧭 规则兜底：{% if result.ai_error %}{{ result.ai_error }}{% if '稳厨经验库' not in result.ai_error %}，先用稳厨经验库{% endif %}{% else %}这次没用 AI，只靠稳厨经验库{% endif %}</span>
       {% endif %}
     </div>
+    {% if result.alias_used %}<p class="sample-note green">🔗 你写的「{{ result.user_dish }}」就是「{{ result.dish }}」，按标准名处理。</p>{% endif %}
+    {% if result.known_only %}<p class="meta">✅ 你选的是稳厨已有的菜，这次没调 AI。</p>{% endif %}
+    {% if result.ai_meta.deduped %}<p class="sample-note green">🧩 AI 认出这道菜的标准名是「{{ result.ai_meta.deduped }}」，稳厨已经拆过，直接用那一份；你的叫法「{{ result.user_dish }}」已记成别名，下次不用再问 AI。</p>{% endif %}
+    {% if result.ai_meta.canonical %}<p class="meta">🧩 AI 认出标准名是「{{ result.ai_meta.canonical }}」，按这个名字存进了菜谱库，你的叫法记成别名。</p>{% endif %}
+    {% if result.ai_meta.site_alias %}<p class="meta">🧩 AI 认出这就是稳厨菜谱里的「{{ result.ai_meta.site_alias }}」，下次输入这个叫法会直接用菜谱。</p>{% endif %}
+    {% if result.personal %}<p class="sample-note">🎯 你的补充说明里有「{{ result.personal }}」，会改变锅具或做法，所以{% if result.mode == 'AI+规则' %}按你的条件单独请 AI 拆了一次，这份结果不存进菜谱库{% else %}本该单独请 AI 按条件拆，但这次 AI 没用上，下面是标准拆法，请自己按条件调整{% endif %}。</p>{% endif %}
+    {% if result.taste_note %}<p class="meta">👅 口味要求「{{ result.taste_note }}」不改变锅具和做法，下面是这道菜的标准拆法，做的时候自己调口味。</p>{% endif %}
+    {% if result.nearby %}<p class="meta">相近的稳厨已有菜：{% for n in result.nearby %}<a href="/dish-ai?known=1&dish={{ n|urlencode }}">{{ n }}</a>{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
     {% if result.matched %}<p class="meta">参考了：{{ result.matched }}{% if result.site_id %} · <a href="/recipe/{{ result.site_id }}">看完整菜谱和步骤 →</a>{% endif %}</p>{% endif %}
 
     {% if result.empty %}
@@ -118,6 +131,38 @@
 <script>
 (function () {
   const form = document.getElementById('dish-ai-form');
+  // 联想：只是辅助，接口出错或没结果就什么都不显示，不挡提交
+  const input = document.getElementById('dish-input');
+  const box = document.getElementById('dish-suggest');
+  let timer = null, seq = 0;
+  function hide() { box.hidden = true; box.innerHTML = ''; }
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { hide(); return; }
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      try {
+        const r = await fetch('/dish-ai/suggest?q=' + encodeURIComponent(q));
+        const data = await r.json();
+        if (my !== seq) return;
+        if (!data.items.length) { hide(); return; }
+        box.innerHTML = '';
+        data.items.forEach(it => {
+          const a = document.createElement('a');
+          a.href = it.url; a.className = 'suggest-item'; a.setAttribute('role', 'option');
+          const n = document.createElement('strong'); n.textContent = it.name;
+          const t = document.createElement('span'); t.className = 'tag'; t.textContent = '（稳厨已有）';
+          const k = document.createElement('span'); k.className = 'kind ' + it.kind; k.textContent = it.label;
+          a.append(n, t, k);
+          box.appendChild(a);
+        });
+        box.hidden = false;
+      } catch (e) { hide(); }
+    }, 150);
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  document.addEventListener('click', e => { if (!box.contains(e.target) && e.target !== input) hide(); });
   form.querySelectorAll('[data-dish]').forEach(a => a.addEventListener('click', e => {
     e.preventDefault();
     form.dish.value = a.dataset.dish;

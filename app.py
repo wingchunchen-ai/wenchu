@@ -6,6 +6,9 @@ import sqlite3#引入sql数据库
 import shop#导购：缺的锅、采购清单、入门备厨（商品数据在 shop_items.json）
 import dish_ai#AI 拆菜：DeepSeek 初稿 + 稳厨经验库（dish_rules.py）核对
 import dish_store#AI 拆菜的记录（也当缓存）和调用限额
+import dish_match#菜名对齐：别名、联想、个性化条件
+import dish_rules#经验库里的常见菜（联想用）
+from urllib.parse import quote#联想链接里的菜名要转码
 # 数据库文件：默认就是和 app.py 放在一起的 厨房数据库.sqlite3
 # 也可以用环境变量 WENCHU_DB 指定别的路径（测试时用临时库副本，不弄脏交付库）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -676,36 +679,98 @@ def client_ip():
     # Render 前面有一层代理，真实访客 IP 在 X-Forwarded-For 的第一个；本机直连就用 remote_addr
     fwd = request.headers.get('X-Forwarded-For', '')
     return fwd.split(',')[0].strip() or request.remote_addr or 'unknown'
-def ai_draft_provider(visitor):
-    # 给 dish_ai.analyze 用：先查拆过的记录（免费），再看限额，最后才真正调 DeepSeek，成功就存一条记录
-    def provide(dish, description):
+def dish_candidates(conn, known):
+    # 联想和对齐用的「稳厨已有」菜：{标准名: 'site' 站内菜谱 / 'cached' 拆过的 / 'common' 经验库}
+    aliases = dish_store.alias_map(conn)
+    cands = {n: 'common' for n in dish_rules.COMMON_DISHES if dish_match.normalize(n) not in aliases}
+    cands.update({n: 'cached' for n in dish_store.cached_names(conn)})
+    cands.update({r['name']: 'site' for r in known})
+    return cands, aliases
+def canonical_display(key, cands):
+    # 标准名（归一化）→ 显示用的名字；不在「稳厨已有」里就返回 None
+    return next((n for n in cands if dish_match.normalize(n) == key), None)
+SUGGEST_LABELS = {'site': '稳厨菜谱', 'cached': '拆过', 'common': '经验库'}
+def ai_draft_provider(visitor, canon_name, canon_key, user_dish, description, personal, known_only, cands):
+    # 给 dish_ai.analyze 用的「AI 初稿」：
+    # 1) 没有个性化条件：先按标准名找存下的记录（免费、不占次数）
+    # 2) 选的是联想里的已有菜（known_only）：找不到记录也不调 AI，交给规则
+    # 3) 否则看限额 → 调 DeepSeek → 按 AI 给的标准名对齐：已有记录就复用并记下别名，没有才新存一条
+    # 个性化条件（没有炒锅、吃素…）：带着说明单独问 AI，结果不存进菜谱库
+    def provide(_dish, _description):
         conn = get_db()
         try:
-            if not description:
-                hit = dish_store.find_cached(conn, dish)
-                if hit:
-                    data = dish_ai.parse_ai_json(json.dumps(hit[1], ensure_ascii=False))  # 存的也再校验一遍
+            if not personal:
+                rec = dish_store.find_record(conn, canon_key)
+                if rec:
+                    dish_store.touch(conn, rec[0])
+                    data = dish_ai.parse_ai_json(json.dumps(rec[2], ensure_ascii=False))  # 存的也再校验一遍
                     data['_cached'] = True
                     return data
+            if known_only:
+                raise dish_ai.AIError('选的是稳厨经验库里的菜，没调 AI')
             reason = dish_store.limit_reason(conn, visitor)
             if reason:
                 raise dish_ai.AIError(reason)
             call_id = dish_store.log_call(conn, visitor)
-            reply = dish_ai.call_deepseek(dish, description)
+            reply = dish_ai.call_deepseek(canon_name, description if personal else '')
             data = dish_ai.parse_ai_json(reply)
             dish_store.mark_ok(conn, call_id)
-            dish_store.save_breakdown(conn, dish, description, data, dish_ai.MODEL,
-                                      getattr(reply, 'usage', None), getattr(reply, 'model', None))
+            if personal:
+                data['_personal'] = personal
+                return data
+            usage, api_model = getattr(reply, 'usage', None), getattr(reply, 'model', None)
+            ai_key = dish_store.resolve_alias(conn, data.get('canonical_name') or canon_name)
+            if ai_key and ai_key != canon_key:  # AI 说这其实是另一道菜的叫法
+                site_name = next((n for n, k in cands.items() if k == 'site' and dish_match.normalize(n) == ai_key), None)
+                existing = dish_store.find_record(conn, ai_key)
+                dish_store.add_alias(conn, user_dish, ai_key, 'ai')
+                dish_store.add_alias(conn, canon_key, ai_key, 'ai')
+                conn.commit()
+                if existing:  # 一个标准名只留一条：复用已有记录，这次的结果不另存
+                    dish_store.touch(conn, existing[0])
+                    old = dish_ai.parse_ai_json(json.dumps(existing[2], ensure_ascii=False))
+                    old['_deduped'] = existing[1]
+                    return old
+                if site_name:  # 站内菜谱是标准答案，不另存；下次输入这个叫法直接用菜谱
+                    data['_site_alias'] = site_name
+                    return data
+                name = canonical_display(ai_key, cands) or data.get('canonical_name')
+                dish_store.save_breakdown(conn, name, dict(data, canonical_name=name), dish_ai.MODEL, usage, api_model)
+                data['_canonical'] = name
+                return data
+            rid, created = dish_store.save_breakdown(conn, canon_name, dict(data, canonical_name=canon_name),
+                                                     dish_ai.MODEL, usage, api_model)
+            dish_store.add_alias(conn, user_dish, canon_key, 'ai')
+            conn.commit()
+            if not created:  # 同时有人存了同一道菜：用先存的那条
+                rec = dish_store.find_record(conn, canon_key)
+                old = dish_ai.parse_ai_json(json.dumps(rec[2], ensure_ascii=False))
+                old['_deduped'] = rec[1]
+                return old
             return data
         finally:
             conn.close()
     return provide
-@app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：输入一道菜，拆出食材、做法、锅具、缺什么、花多少
+@app.route('/dish-ai/suggest')  # 输入时联想「稳厨已有」的菜：只做字符串匹配，不调 AI
+def dish_ai_suggest():
+    q = (request.args.get('q') or '').strip()[:20]
+    if not dish_match.normalize(q):
+        return {'items': []}
+    conn = get_db()
+    try:
+        cands, aliases = dish_candidates(conn, known_recipes_for_rules(conn))
+    finally:
+        conn.close()
+    items = [{'name': n, 'kind': k, 'label': SUGGEST_LABELS[k], 'url': '/dish-ai?known=1&dish=' + quote(n)}
+             for n, k, _ in dish_match.suggest(q, cands, aliases)]
+    return {'items': items}
+@app.route('/dish-ai', methods=['GET', 'POST'])  # AI 拆菜：一个输入框，先对齐已有菜，再走缓存 / AI
 def dish_ai_page():
     form = request.form if request.method == 'POST' else request.args
     dish = (form.get('dish') or '').strip()[:20]
     description = (form.get('description') or '').strip()[:100]
     rules_only = form.get('rules_only') == '1'
+    known_only = form.get('known') == '1'  # 点了联想里的「稳厨已有」菜：零 AI
     mine = user_cookware(current_user())
     catalog = shop.load_shop()
     result = None
@@ -715,13 +780,29 @@ def dish_ai_page():
         conn = get_db()
         try:
             known = known_recipes_for_rules(conn)
+            cands, aliases = dish_candidates(conn, known)
+            canon_key = dish_store.resolve_alias(conn, dish)
         finally:
             conn.close()
+        canon_name = canonical_display(canon_key, cands) or dish
+        personal = '' if known_only else dish_match.personal_reason(description)
         visitor = dish_store.visitor_id(client_ip(), app.secret_key)
-        result = dish_ai.analyze(dish, description, mine, bool(mine), known, catalog, use_ai=not rules_only,
-                                 provider=ai_draft_provider(visitor))
+        provider = ai_draft_provider(visitor, canon_name, canon_key, dish, description, personal, known_only, cands)
+        result = dish_ai.analyze(canon_name, description, mine, bool(mine), known, catalog, use_ai=not rules_only,
+                                 provider=provider, skip_site=bool(personal))
+        result['user_dish'] = dish
+        result['alias_used'] = dish_match.normalize(dish) != dish_match.normalize(canon_name)
+        meta = result['ai_meta']
+        if meta.get('deduped') or meta.get('canonical'):  # AI 认出了标准名：标题用标准名
+            result['dish'] = meta.get('deduped') or meta.get('canonical')
+        result['personal'] = personal
+        result['taste_note'] = description if description and not personal and not rules_only else ''
+        result['known_only'] = known_only
+        if canon_name not in cands and not meta:  # 没对上已有的菜，AI 也没帮忙对齐：列几个相近的（不靠 JS 也能看到）
+            result['nearby'] = [n for n, _, sc in dish_match.suggest(dish, cands, aliases, 4) if sc >= 40]
     return render_template('dish_ai.html', result=result, dish=dish, description=description, rules_only=rules_only,
-                           mine=mine, shop_cfg=catalog, per_ip=dish_store.per_ip_daily(), examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
+                           mine=mine, shop_cfg=catalog, per_ip=dish_store.per_ip_daily(),
+                           examples=['宫保鸡丁', '清蒸鲈鱼', '红烧肉', '番茄炒蛋'])
 SHOP_SOURCES = {'detail': '详情页·缺的锅', 'tool': '详情页·小工具', 'list': '采购清单', 'starter': '入门备厨'}
 @app.route('/go')  # 购买按钮先经过这里：记一次点击，再跳去平台页面
 def go_buy():

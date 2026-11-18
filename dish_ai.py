@@ -18,6 +18,7 @@ MAX_NAME = 20
 SYSTEM_PROMPT = (
     '你是家常菜拆解助手。用户给一道菜名（可能附简短描述），你只输出一个 JSON 对象，不要输出任何别的文字。'
     '字段：{"recognized": true/false（是否认得这道菜）, '
+    '"canonical_name": "这道菜最通用的标准菜名（例如 宫爆鸡丁 → 宫保鸡丁、西红柿炒鸡蛋 → 番茄炒蛋；本来就标准就原样写）", '
     '"main": ["主料名", ...], "side": ["辅料名", ...], "season": ["调味料名", ...], '
     '"methods": ["做法", ...], "cookware": [{"name": "锅具名", "reason": "为什么要用（15字内）"}], '
     '"tips": "给新手的一句提醒（30字内）"}。'
@@ -131,6 +132,7 @@ def parse_ai_json(text):
             cookware.append({'name': name, 'reason': reason})
     tips = data.get('tips') if isinstance(data.get('tips'), str) else ''
     result = {
+        'canonical_name': _clean_name(data.get('canonical_name')),
         'main': _clean_list(data.get('main')),
         'side': _clean_list(data.get('side')),
         'season': _clean_list(data.get('season')),
@@ -143,13 +145,17 @@ def parse_ai_json(text):
     return result
 
 
-def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=True, caller=None, provider=None):
+def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=True, caller=None, provider=None,
+            skip_site=False):
+    # skip_site：补充说明里有个性化条件（没有炒锅、吃素…）时为 True，站内菜谱也不直接套用，让 AI 按条件重拆
     # provider：可选，(菜名, 说明) → 已校验的 AI 初稿 dict（app 里用它接上缓存和限额）；不给就直接调 caller/call_deepseek
     # 主流程：先试 AI，再让规则拍板锅具；AI 不可用就纯规则。返回页面要的全部数据
     dish = _clean_name(dish)
     description = (description or '').strip()[:100]
     ai, ai_error = None, '' if use_ai else '已选只用稳厨经验库'
     rules = dish_rules.rule_draft(dish, description, known_recipes)
+    if skip_site and use_ai and rules['site_id']:
+        rules.update(site_id=None, site_tools=[], ingredients_list=None)
     if rules['site_id']:  # 站内已有这道菜：直接用菜谱里的食材、做法、锅具，花费跟列表页一致，不调 AI
         use_ai = False
     if use_ai:
@@ -194,7 +200,8 @@ def analyze(dish, description, owned, know_pots, known_recipes, catalog, use_ai=
     rows = shop.shopping_list(recipe['ingredients_list'], catalog) if buy else []
     return {
         'dish': dish, 'description': description, 'mode': mode, 'ai_error': ai_error,
-        'matched': rules['matched'], 'site_id': rules['site_id'], 'cached': bool(ai and ai.get('_cached')), 'main': main, 'side': side, 'season': season, 'methods': methods,
+        'matched': rules['matched'], 'site_id': rules['site_id'], 'cached': bool(ai and ai.get('_cached')),
+        'ai_meta': {k[1:]: v for k, v in (ai or {}).items() if k.startswith('_')}, 'main': main, 'side': side, 'season': season, 'methods': methods,
         'cookware': cookware, 'dropped': [d for d in dropped if d], 'tips': tips,
         'have': [p for p in pot_names if p in owned], 'missing': [p for p in pot_names if p not in owned],
         'know_pots': know_pots, 'cost': cost, 'rows': rows,

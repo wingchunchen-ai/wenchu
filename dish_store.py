@@ -1,19 +1,28 @@
-# AI 拆菜的「账本」：拆过的菜存成可复用的记录（也当缓存），外加 AI 调用次数的限额
+# AI 拆菜的「账本」：拆过的菜存成可复用的记录（也当缓存）、菜名别名表，外加 AI 调用次数的限额
 #
-# 表 dish_breakdowns —— 每一次成功的 AI 拆菜一条，将来是「菜谱库」和 skill 的素材
+# 一个标准名 = 一条记录。各种叫法（宫爆鸡丁、宫保鸡）都记在别名表里，指向同一个标准名。
+# 隐私：不存用户写的补充说明，也不存原始 IP。
+#
+# 表 dish_breakdowns —— 每个标准名一条 AI 拆菜结果，将来是「菜谱库」和 skill 的素材
 #   id                 自增主键
-#   dish_key           归一化后的菜名（去空格、标点，全角转半角，英文小写），查缓存用
-#   dish_name          用户输入的菜名（清洗后，原样显示用）
-#   description        用户写的补充说明；空字符串表示没写。只有空说明的记录会被当缓存复用
+#   canonical_key      标准名归一化后的写法（dish_match.normalize），唯一
+#   canonical_name     标准名（显示用），例如「宫保鸡丁」
 #   result_json        AI 返回并经过 dish_ai.parse_ai_json 校验清洗后的 JSON：
-#                      {"main": [...], "side": [...], "season": [...], "methods": [...],
+#                      {"canonical_name": "...", "main": [...], "side": [...], "season": [...], "methods": [...],
 #                       "cookware": [{"name", "reason"}], "tips": "..."}
-#                      注意存的是「AI 初稿」，锅具最终以 dish_rules 规则核对为准（每次展示时重新核对）
+#                      存的是「AI 初稿」，锅具最终以 dish_rules 规则核对为准（每次展示时重新核对）
 #   mode               这条记录怎么来的，目前固定 'AI+规则'
 #   model              调用时用的模型名（deepseek-v4-flash）；api_model 是接口回报的实际模型名
 #   prompt_tokens / completion_tokens / cache_hit_tokens / cache_miss_tokens / total_tokens
-#                      这次调用的用量（接口的 prompt_cache_hit_tokens / prompt_cache_miss_tokens；没给就是 NULL），算成本用
-#   created_at         UTC 时间
+#                      生成这条记录那次调用的用量（没给就是 NULL），算成本用
+#   created_at         第一次存的时间（UTC）
+#   updated_at         最近一次被复用或加了别名的时间（UTC）
+#
+# 表 dish_aliases —— 别名 → 标准名
+#   alias_key          叫法归一化后的写法，主键
+#   canonical_key      指向的标准名（归一化），可能是站内菜、经验库常见菜或 dish_breakdowns 里的菜
+#   source             'seed' 种子（dish_match.SEED_ALIASES）/ 'ai' AI 认出的标准名 / 'migrated' 旧数据迁过来的
+#   created_at         UTC
 #
 # 表 dish_ai_calls —— 每一次真正发出去的 AI 请求一条（缓存命中不记），限额就数这张表
 #   visitor   访客 IP 的哈希（不存原始 IP）
@@ -21,14 +30,14 @@
 #   ok        1 = 拿到合格结果，0 = 出错 / 超时 / 返回不合格
 #   created_at UTC 时间
 #
-# 提醒：Render 免费版的 SQLite 在每次重新部署后会清空，这两张表也一样。
+# 提醒：Render 免费版的 SQLite 在每次重新部署后会清空，这些表也一样。
 import hashlib
 import json
 import os
-import re
-import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+import dish_match
 
 DEFAULT_PER_IP_DAILY = 0    # 每个 IP 每天（伦敦日期）最多真正调几次 AI，环境变量 DISH_AI_PER_IP_DAILY；0 = 不限（现在默认不限）
 DEFAULT_DAILY_CAP = 200     # 全站每天最多真正调几次 AI，环境变量 DISH_AI_DAILY_CAP
@@ -39,27 +48,40 @@ def london_day(now=None):
     return (now or datetime.now(LONDON)).astimezone(LONDON).strftime('%Y-%m-%d')
 
 
+BREAKDOWN_COLS = ['id', 'canonical_key', 'canonical_name', 'result_json', 'mode', 'model', 'api_model', 'prompt_tokens',
+                  'completion_tokens', 'cache_hit_tokens', 'cache_miss_tokens', 'total_tokens', 'created_at', 'updated_at']
+CREATE_BREAKDOWNS = '''CREATE TABLE IF NOT EXISTS {name} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    canonical_key TEXT NOT NULL UNIQUE,
+    canonical_name TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'AI+规则',
+    model TEXT NOT NULL,
+    api_model TEXT,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    cache_hit_tokens INTEGER,
+    cache_miss_tokens INTEGER,
+    total_tokens INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)'''
+
+
 def init_tables(conn):
-    conn.execute('''CREATE TABLE IF NOT EXISTS dish_breakdowns (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dish_key TEXT NOT NULL,
-        dish_name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        result_json TEXT NOT NULL,
-        mode TEXT NOT NULL DEFAULT 'AI+规则',
-        model TEXT NOT NULL,
-        api_model TEXT,
-        prompt_tokens INTEGER,
-        completion_tokens INTEGER,
-        cache_hit_tokens INTEGER,
-        cache_miss_tokens INTEGER,
-        total_tokens INTEGER,
+    conn.execute('''CREATE TABLE IF NOT EXISTS dish_aliases (
+        alias_key TEXT PRIMARY KEY,
+        canonical_key TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'seed',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )''')
+    for alias, canon in dish_match.SEED_ALIASES.items():
+        conn.execute("INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source) VALUES (?, ?, 'seed')",
+                     (normalize_dish(alias), normalize_dish(canon)))
     cols = [r[1] for r in conn.execute('PRAGMA table_info(dish_breakdowns)')]
-    if 'cache_miss_tokens' not in cols:  # 早期建的表没有这一列，补上
-        conn.execute('ALTER TABLE dish_breakdowns ADD COLUMN cache_miss_tokens INTEGER')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_dish_breakdowns_key ON dish_breakdowns (dish_key, description)')
+    if cols and 'canonical_key' not in cols:
+        _migrate_old_breakdowns(conn, cols)
+    conn.execute(CREATE_BREAKDOWNS.format(name='dish_breakdowns'))
     conn.execute('''CREATE TABLE IF NOT EXISTS dish_ai_calls (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         visitor TEXT NOT NULL,
@@ -70,10 +92,52 @@ def init_tables(conn):
     conn.execute('CREATE INDEX IF NOT EXISTS idx_dish_ai_calls_day ON dish_ai_calls (day, visitor)')
 
 
+def _migrate_old_breakdowns(conn, cols):
+    # 旧表（按菜名 + 补充说明存）→ 新表（一个标准名一条，不存说明）
+    # 只搬没写说明的记录（写了说明的可能带个人情况，直接丢掉）；同一标准名留最新那条；旧菜名记成别名
+    rows = conn.execute("SELECT * FROM dish_breakdowns WHERE COALESCE(description, '') = '' ORDER BY id DESC").fetchall()
+    conn.execute(CREATE_BREAKDOWNS.format(name='dish_breakdowns_new'))
+    for r in rows:
+        r = dict(zip([c[0] for c in conn.execute('SELECT * FROM dish_breakdowns LIMIT 0').description], r))
+        old_key = r.get('dish_key') or normalize_dish(r.get('dish_name'))
+        canon_key = resolve_alias(conn, old_key)
+        name = r.get('dish_name') if canon_key == old_key else canon_key
+        conn.execute('''INSERT OR IGNORE INTO dish_breakdowns_new (canonical_key, canonical_name, result_json, mode, model, api_model,
+                        prompt_tokens, completion_tokens, cache_hit_tokens, cache_miss_tokens, total_tokens, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (canon_key, name, r['result_json'], r.get('mode') or 'AI+规则', r['model'], r.get('api_model'),
+                      r.get('prompt_tokens'), r.get('completion_tokens'), r.get('cache_hit_tokens'), r.get('cache_miss_tokens'),
+                      r.get('total_tokens'), r['created_at'], r['created_at']))
+        if old_key != canon_key:
+            add_alias(conn, old_key, canon_key, 'migrated')
+    conn.execute('DROP TABLE dish_breakdowns')
+    conn.execute('ALTER TABLE dish_breakdowns_new RENAME TO dish_breakdowns')
+
+
 def normalize_dish(name):
-    # 「宫保 鸡丁」「宫保鸡丁！」「宫保鸡丁 」都算同一道菜
-    s = unicodedata.normalize('NFKC', name or '').lower()
-    return re.sub(r'[\s\W_]+', '', s)
+    return dish_match.normalize(name)
+
+
+def resolve_alias(conn, name_or_key):
+    # 叫法 → 标准名（归一化）；别名表里没有就是它自己
+    key = normalize_dish(name_or_key)
+    row = conn.execute('SELECT canonical_key FROM dish_aliases WHERE alias_key = ?', (key,)).fetchone()
+    return row[0] if row else key
+
+
+def add_alias(conn, alias, canonical_key, source='ai'):
+    a = normalize_dish(alias)
+    if a and a != canonical_key:
+        conn.execute('INSERT OR IGNORE INTO dish_aliases (alias_key, canonical_key, source) VALUES (?, ?, ?)',
+                     (a, canonical_key, source))
+
+
+def alias_map(conn):
+    return {r[0]: r[1] for r in conn.execute('SELECT alias_key, canonical_key FROM dish_aliases')}
+
+
+def cached_names(conn):
+    return [r[0] for r in conn.execute('SELECT canonical_name FROM dish_breakdowns ORDER BY id')]
 
 
 def _env_int(name, default):
@@ -97,16 +161,21 @@ def visitor_id(ip, salt):
     return hashlib.sha256(f'{salt}|{ip or "unknown"}'.encode('utf-8')).hexdigest()[:32]
 
 
-def find_cached(conn, dish):
-    # 同一道菜（归一化后）、没写补充说明 → 返回最近一条记录的 AI 初稿；没有返回 None
-    row = conn.execute('''SELECT id, result_json FROM dish_breakdowns WHERE dish_key = ? AND description = ''
-                          ORDER BY id DESC LIMIT 1''', (normalize_dish(dish),)).fetchone()
+def find_record(conn, canonical_key):
+    # 按标准名找记录：返回 (id, 标准名, AI 初稿 dict) 或 None
+    row = conn.execute('SELECT id, canonical_name, result_json FROM dish_breakdowns WHERE canonical_key = ?',
+                       (canonical_key,)).fetchone()
     if not row:
         return None
     try:
-        return row['id'], json.loads(row['result_json'])
+        return row[0], row[1], json.loads(row[2])
     except ValueError:
         return None
+
+
+def touch(conn, record_id):
+    conn.execute("UPDATE dish_breakdowns SET updated_at = datetime('now') WHERE id = ?", (record_id,))
+    conn.commit()
 
 
 def limit_reason(conn, visitor, day=None):
@@ -132,19 +201,23 @@ def mark_ok(conn, call_id):
     conn.commit()
 
 
-def save_breakdown(conn, dish, description, result, model, usage=None, api_model=None):
+def save_breakdown(conn, canonical_name, result, model, usage=None, api_model=None):
+    # 存一条标准记录；同一个标准名已经有了就不存（一个标准名 = 一条记录），返回 (记录 id, 是否新存)
     u = usage if isinstance(usage, dict) else {}
 
     def num(k):
         v = u.get(k)
         return v if isinstance(v, int) else None
 
-    cur = conn.execute('''INSERT INTO dish_breakdowns (dish_key, dish_name, description, result_json, mode, model, api_model,
+    key = normalize_dish(canonical_name)
+    cur = conn.execute('''INSERT OR IGNORE INTO dish_breakdowns (canonical_key, canonical_name, result_json, mode, model, api_model,
                           prompt_tokens, completion_tokens, cache_hit_tokens, cache_miss_tokens, total_tokens)
-                          VALUES (?, ?, ?, ?, 'AI+规则', ?, ?, ?, ?, ?, ?, ?)''',
-                       (normalize_dish(dish), dish, description or '', json.dumps(result, ensure_ascii=False), model,
+                          VALUES (?, ?, ?, 'AI+规则', ?, ?, ?, ?, ?, ?, ?)''',
+                       (key, canonical_name, json.dumps(result, ensure_ascii=False), model,
                         api_model if isinstance(api_model, str) else None, num('prompt_tokens'),
                         num('completion_tokens'), num('prompt_cache_hit_tokens'), num('prompt_cache_miss_tokens'),
                         num('total_tokens')))
     conn.commit()
-    return cur.lastrowid
+    if cur.rowcount:
+        return cur.lastrowid, True
+    return conn.execute('SELECT id FROM dish_breakdowns WHERE canonical_key = ?', (key,)).fetchone()[0], False

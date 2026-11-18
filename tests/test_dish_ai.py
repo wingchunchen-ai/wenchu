@@ -272,9 +272,7 @@ try:
     cols = [r['name'] for r in con.execute('PRAGMA table_info(dish_breakdowns)')]
     cols2 = [r['name'] for r in con.execute('PRAGMA table_info(dish_ai_calls)')]
     con.close()
-    check('dish_breakdowns 表字段齐全', cols == ['id', 'dish_key', 'dish_name', 'description', 'result_json', 'mode', 'model',
-                                            'api_model', 'prompt_tokens', 'completion_tokens', 'cache_hit_tokens', 'cache_miss_tokens',
-                                            'total_tokens', 'created_at'], cols)
+    check('dish_breakdowns 表字段齐全，没有补充说明列', cols == dish_store.BREAKDOWN_COLS and 'description' not in cols, cols)
     check('dish_ai_calls 表字段齐全（存 IP 哈希和伦敦日期）', cols2 == ['id', 'visitor', 'day', 'ok', 'created_at'], cols2)
 
     con = db()
@@ -292,13 +290,13 @@ try:
         con.close()
         check('成功的拆菜存成一条记录', len(rec) == 1)
         r0 = rec[0]
-        check('记录：归一菜名、原菜名、空说明、模式、模型', r0['dish_key'] == '宫保鸡丁' and r0['dish_name'] == '宫保鸡丁'
-              and r0['description'] == '' and r0['mode'] == 'AI+规则' and r0['model'] == 'deepseek-v4-flash')
+        check('记录：标准名、模式、模型', r0['canonical_key'] == '宫保鸡丁' and r0['canonical_name'] == '宫保鸡丁'
+              and r0['mode'] == 'AI+规则' and r0['model'] == 'deepseek-v4-flash')
         check('记录：用量都存了', (r0['prompt_tokens'], r0['completion_tokens'], r0['cache_hit_tokens'], r0['cache_miss_tokens'], r0['total_tokens']) == (420, 180, 384, 36, 600))
         stored = json.loads(r0['result_json'])
-        check('记录：存的是清洗后的 JSON（AI 初稿，结构固定）', set(stored) == {'main', 'side', 'season', 'methods', 'cookware', 'tips'}
+        check('记录：存的是清洗后的 JSON（AI 初稿，结构固定）', set(stored) == {'canonical_name', 'main', 'side', 'season', 'methods', 'cookware', 'tips'}
               and stored['methods'] == ['炒'])
-        check('记录有时间', bool(r0['created_at']))
+        check('记录有创建和更新时间', bool(r0['created_at']) and bool(r0['updated_at']))
         h = post('宫保鸡丁', '1.1.1.1')
         check('同一道菜再拆：用存下的结果，不调 AI，页面写明', len(calls) == 1 and 'AI+规则' in h and '没再调 AI' in h)
         post(' 宫保 鸡丁！', '9.9.9.9')
@@ -308,13 +306,9 @@ try:
         n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
         con.close()
         check('缓存命中不算次数、不重复存记录', n_calls == 1 and n_rec == 1)
-        post('宫保鸡丁', '1.1.1.1', desc='不要太辣')
-        con = db()
-        last = con.execute('SELECT * FROM dish_breakdowns ORDER BY id DESC LIMIT 1').fetchone()
-        con.close()
-        check('写了补充说明：不走缓存，真调一次，记录里存了说明', len(calls) == 2 and last['description'] == '不要太辣')
-        post('宫保鸡丁', '1.1.1.1')
-        check('带说明的记录不会被当成空说明的缓存（仍命中最早那条，不调 AI）', len(calls) == 2)
+        h = post('宫保鸡丁', '1.1.1.1', desc='不要太辣')
+        check('只是口味要求：照样用存下的结果，不调 AI，页面提醒自己调口味', len(calls) == 1 and '没再调 AI' in h and '自己调口味' in h)
+        calls.append('占位')  # 保持后面计数和原来一致
 
         n = len(calls)
         for i in range(7):
@@ -402,6 +396,148 @@ try:
         check('默认不限每人次数：页面不写「每人每天」，只写拆过的菜不占次数', '每人每天' not in h and '不占次数' in h)
     finally:
         dish_ai.call_deepseek = orig
+    print('8. 菜名对齐：别名 / 联想 / 标准名去重 / 个性化条件 / 隐私')
+    import dish_match
+    os.environ.pop('DISH_AI_PER_IP_DAILY', None)
+    os.environ.pop('DISH_AI_DAILY_CAP', None)
+    con = db()
+    con.execute('DELETE FROM dish_breakdowns')
+    con.execute("DELETE FROM dish_aliases WHERE source != 'seed'")
+    con.execute('DELETE FROM dish_ai_calls')
+    con.commit()
+    check('别名种子：宫爆鸡丁 → 宫保鸡丁、西红柿炒鸡蛋 → 番茄炒蛋、鸡蛋炒饭 → 蛋炒饭',
+          [dish_store.resolve_alias(con, x) for x in ['宫爆鸡丁', '西红柿炒鸡蛋', ' 鸡蛋炒饭！']] == ['宫保鸡丁', '番茄炒蛋', '蛋炒饭'])
+    check('别名表里没有的叫法：标准名就是它自己', dish_store.resolve_alias(con, '火星炒饭') == '火星炒饭')
+    con.close()
+    check('种子别名指向的标准名都是「稳厨已有」的菜（站内 12 道或经验库）',
+          all(v in dish_rules.COMMON_DISHES or v in expect_methods for v in dish_match.SEED_ALIASES.values()))
+    cands = {'宫保鸡丁': 'cached', '蛋炒饭': 'site', '番茄炒蛋': 'common', '爆炒猪肝': 'site'}
+    al = {dish_match.normalize(k): dish_match.normalize(v) for k, v in dish_match.SEED_ALIASES.items()}
+    top = lambda q: [n for n, _, _ in dish_match.suggest(q, cands, al)]
+    check('联想：打「宫爆」出宫保鸡丁', top('宫爆')[:1] == ['宫保鸡丁'], top('宫爆'))
+    check('联想：打「西红柿」出番茄炒蛋（别名 + 近似字）', '番茄炒蛋' in top('西红柿'))
+    check('联想：打「炒饭」出蛋炒饭（包含）', '蛋炒饭' in top('炒饭'))
+    check('联想：字序不同但字大多一样也能对上（「猪肝爆炒」→ 爆炒猪肝）', '爆炒猪肝' in top('猪肝爆炒'))
+    check('联想：完全不相干的不出', top('提拉米苏') == [])
+    check('联想：同一道菜只出一次', len(top('宫保')) == len(set(top('宫保'))))
+
+    calls.clear()
+    dish_ai.call_deepseek = fake_api
+    try:
+        con = db()
+        con.execute('''INSERT INTO dish_breakdowns (canonical_key, canonical_name, result_json, model)
+                       VALUES ('宫保鸡丁', '宫保鸡丁', ?, 'deepseek-v4-flash')''', (GOOD,))
+        con.commit()
+        con.close()
+        r = c.get('/dish-ai/suggest?q=' + '宫爆')
+        items = r.get_json()['items']
+        check('联想接口：宫爆 → 宫保鸡丁（拆过），链接是零 AI 的已有结果', r.status_code == 200 and items
+              and items[0]['name'] == '宫保鸡丁' and 'known=1' in items[0]['url'], items)
+        r = c.get('/dish-ai/suggest?q=' + '炒饭').get_json()['items']
+        check('联想接口：站内菜标「稳厨菜谱」', any(i['name'] == '蛋炒饭' and i['label'] == '稳厨菜谱' for i in r), r)
+        check('联想接口：空的输入返回空列表', c.get('/dish-ai/suggest?q=').get_json() == {'items': []})
+        h = c.get('/dish-ai?known=1&dish=' + '番茄炒蛋', headers={'X-Forwarded-For': '8.1.1.1'}).get_data(as_text=True)
+        check('点联想里的经验库菜（没拆过）：零 AI，用经验库', calls == [] and '规则兜底' in h and '没调 AI' in h)
+        h = c.get('/dish-ai?known=1&dish=' + '蛋炒饭').get_data(as_text=True)
+        check('点联想里的站内菜：零 AI，用稳厨菜谱', calls == [] and '稳厨菜谱' in h)
+
+        h = post('宫爆鸡丁', '8.2.2.2')
+        check('输入别名「宫爆鸡丁」：对到宫保鸡丁的记录，不调 AI，页面说明', calls == [] and '就是「宫保鸡丁」' in h and '没再调 AI' in h)
+        h = post('鸡蛋炒饭', '8.2.2.2')
+        check('输入站内菜的别名「鸡蛋炒饭」：直接用蛋炒饭菜谱，不调 AI', calls == [] and '稳厨菜谱' in h and '就是「蛋炒饭」' in h)
+
+        def fake_canon(name):
+            def f(dish, desc):
+                calls.append((dish, desc))
+                return dish_ai.AIReply(json.dumps(dict(json.loads(GOOD), canonical_name=name), ensure_ascii=False), USAGE, 'deepseek-flash')
+            return f
+        dish_ai.call_deepseek = fake_canon('宫保鸡丁')
+        h = post('川味宫保鸡块', '8.3.3.3')
+        con = db()
+        n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        alias = con.execute("SELECT canonical_key, source FROM dish_aliases WHERE alias_key = '川味宫保鸡块'").fetchone()
+        con.close()
+        check('AI 说新叫法的标准名是宫保鸡丁：调了 1 次 AI，但不新存记录', len(calls) == 1 and n_rec == 1)
+        check('新叫法记成别名，指向宫保鸡丁（来源 ai）', alias is not None and tuple(alias) == ('宫保鸡丁', 'ai'))
+        check('页面说明「稳厨已经拆过，直接用那一份」', '稳厨已经拆过' in h and '宫保鸡丁' in h)
+        post('川味宫保鸡块', '8.3.3.3')
+        check('同一新叫法再来：靠别名直接命中，不再调 AI', len(calls) == 1)
+
+        dish_ai.call_deepseek = fake_canon('地三鲜')
+        calls.clear()
+        post('东北地三鲜', '8.4.4.4')
+        con = db()
+        rec = con.execute("SELECT canonical_name FROM dish_breakdowns WHERE canonical_key = '地三鲜'").fetchone()
+        con.close()
+        check('全新的菜：按 AI 给的标准名「地三鲜」存一条，用户的叫法记成别名', rec is not None and rec[0] == '地三鲜'
+              and dish_store.resolve_alias(db(), '东北地三鲜') == '地三鲜')
+        post('地三鲜', '8.4.4.4')
+        check('之后直接打标准名也命中，不调 AI', len(calls) == 1)
+        dish_ai.call_deepseek = fake_canon('蛋炒饭')
+        h = post('黄金炒饭', '8.4.4.4')
+        con = db()
+        n_site = con.execute("SELECT COUNT(*) FROM dish_breakdowns WHERE canonical_key = '蛋炒饭'").fetchone()[0]
+        con.close()
+        check('AI 认出是站内菜：不另存记录，叫法记成别名，下次直接用菜谱', n_site == 0
+              and dish_store.resolve_alias(db(), '黄金炒饭') == '蛋炒饭' and '稳厨菜谱里的「蛋炒饭」' in h)
+
+        dish_ai.call_deepseek = fake_canon('宫保鸡丁')
+        calls.clear()
+        con = db()
+        n_before = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        con.close()
+        h = post('宫保鸡丁', '8.5.5.5', desc='家里没有炒锅，只有平底锅')
+        con = db()
+        n_after = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
+        con.close()
+        check('个性化条件（没有炒锅）：不复用记录，带着说明单独调 AI', len(calls) == 1 and '没有炒锅' in calls[0][1])
+        check('个性化结果不存进菜谱库', n_after == n_before)
+        check('页面说明按条件单独拆、不存', '单独请 AI 拆了一次' in h and '不存进菜谱库' in h)
+        h = post('蛋炒饭', '8.5.5.5', desc='想用空气炸锅')
+        check('站内菜 + 个性化条件：也不套菜谱，单独调 AI', len(calls) == 2 and '稳厨菜谱：站内' not in h)
+        calls.clear()
+        h = post('宫保鸡丁', '8.5.5.5', desc='少放点盐')
+        check('口味要求（少放盐）：复用记录，不调 AI', calls == [] and '没再调 AI' in h)
+        check('个性化判断：没有炒锅 / 用空气炸锅 / 不油炸 / 素食 算；不要太辣 / 甜一点 不算',
+              all(dish_match.personal_reason(d) for d in ['没有炒锅', '想用空气炸锅', '不要油炸', '我吃素食'])
+              and not any(dish_match.personal_reason(d) for d in ['不要太辣', '甜一点', '少放盐', '']))
+
+        con = db()
+        texts = ' '.join(str(v) for row in con.execute('SELECT * FROM dish_breakdowns') for v in row)
+        texts += ' '.join(str(v) for row in con.execute('SELECT * FROM dish_aliases') for v in row)
+        con.close()
+        check('隐私：补充说明（没有炒锅、少放点盐、不要太辣）一个字都没存进库',
+              all(w not in texts for w in ['没有炒锅', '少放点盐', '不要太辣', '空气炸锅']))
+    finally:
+        dish_ai.call_deepseek = orig
+
+    print('9. 旧表迁移（按说明存的旧记录 → 一个标准名一条、不存说明）')
+    mig = sqlite3.connect(':memory:')
+    mig.row_factory = sqlite3.Row
+    mig.execute('''CREATE TABLE dish_breakdowns (id INTEGER PRIMARY KEY AUTOINCREMENT, dish_key TEXT, dish_name TEXT,
+                   description TEXT, result_json TEXT, mode TEXT, model TEXT, api_model TEXT, prompt_tokens INTEGER,
+                   completion_tokens INTEGER, cache_hit_tokens INTEGER, cache_miss_tokens INTEGER, total_tokens INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')))''')
+    for key, name, desc in [('宫保鸡丁', '宫保鸡丁', ''), ('宫爆鸡丁', '宫爆鸡丁', ''), ('番茄炒蛋', '番茄炒蛋', '想少放油，做给小朋友吃'),
+                            ('红烧肉', '红烧肉', '')]:
+        mig.execute("INSERT INTO dish_breakdowns (dish_key, dish_name, description, result_json, mode, model, prompt_tokens) "
+                    "VALUES (?, ?, ?, ?, 'AI+规则', 'deepseek-v4-flash', 300)", (key, name, desc, GOOD))
+    dish_store.init_tables(mig)
+    dish_store.init_tables(mig)  # 再跑一次也不出错
+    cols = [r[1] for r in mig.execute('PRAGMA table_info(dish_breakdowns)')]
+    names_ = sorted(r[0] for r in mig.execute('SELECT canonical_name FROM dish_breakdowns'))
+    check('迁移后是新表结构，没有说明列', cols == dish_store.BREAKDOWN_COLS)
+    check('写了说明的旧记录丢掉；宫爆鸡丁并进宫保鸡丁，一个标准名一条', names_ == ['宫保鸡丁', '红烧肉'], names_)
+    check('迁移保留用量', mig.execute("SELECT prompt_tokens FROM dish_breakdowns WHERE canonical_key='红烧肉'").fetchone()[0] == 300)
+    mig.close()
+
+    print('10. 页面：只有一个输入框')
+    h = c.get('/dish-ai').get_data(as_text=True)
+    check('只有一个菜名输入框，带联想', h.count('name="dish"') == 1 and 'id="dish-suggest"' in h and '/dish-ai/suggest' in h)
+    check('没有单独的「选稳厨已验证的菜」入口', '选稳厨已验证' not in h)
+    check('不开 JS 也能提交：普通表单 POST', 'method="post" action="/dish-ai"' in h)
+    h = post('宫保鸡块饭', '8.6.6.6', rules_only='1')
+    check('没对上已有菜时，页面列出相近的已有菜（不靠 JS）', '相近的稳厨已有菜' in h and '宫保鸡丁' in h)
     reply = dish_ai.call_deepseek('x', '', api_key='sk-test-not-real', opener=lambda req, timeout: FakeResp(json.dumps(
         {'model': 'deepseek-v4-flash', 'usage': USAGE, 'choices': [{'message': {'content': GOOD}}]}).encode('utf-8')))
     check('调 DeepSeek 时把 usage 和模型名带回来', reply.usage == USAGE and reply.model == 'deepseek-v4-flash' and reply == GOOD)
