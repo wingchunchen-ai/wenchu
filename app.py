@@ -325,7 +325,7 @@ def question_list():
 def question_detail(question_id):
     conn = get_db()
     try:
-        question = conn.execute('''SELECT q.id, q.question_text, q.created_at, q.recipe_id,
+        question = conn.execute('''SELECT q.id, q.question_text, q.created_at, q.recipe_id, q.user_id,
             r.name AS recipe_name, u.nickname
             FROM questions q
             JOIN recipes r ON q.recipe_id = r.id
@@ -340,6 +340,27 @@ def question_detail(question_id):
     if question is None:
         return render_template('error.html', message='这条质疑不存在。'), 404
     return render_template('question_detail.html', question=question, counts=counts)
+# 删除质疑的路由：只有提这条质疑的人能删，删掉时连同它的站队票一起清掉
+@app.route('/question/<int:question_id>/delete', methods=['POST'])
+def delete_question(question_id):
+    if not current_user():
+        flash('请先保存厨房画像。')
+        return redirect(f'/question/{question_id}')
+    conn = get_db()
+    try:
+        question = conn.execute('SELECT user_id, recipe_id FROM questions WHERE id = ?', (question_id,)).fetchone()
+        if question is None:
+            flash('这条质疑已经不在了。')
+            return redirect('/questions')
+        if question['user_id'] != session['user_id']:
+            return render_template('error.html', message='只有提出这条质疑的人能删除它。'), 403
+        conn.execute('DELETE FROM verdicts WHERE question_id = ?', (question_id,))
+        conn.execute('DELETE FROM questions WHERE id = ?', (question_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    flash('质疑已删除。')
+    return redirect(f"/recipe/{question['recipe_id']}")
 VERDICTS = ('确实有错', '质疑不对')
 # 存裁决的路由
 @app.route('/verdict', methods=['POST'])

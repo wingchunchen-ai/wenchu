@@ -39,6 +39,11 @@
         <button type="submit">质疑不对</button>
     </form>
     </div>
+    {% if me and me['id'] == question['user_id'] %}
+    <form action="/question/{{ question['id'] }}/delete" method="post" onsubmit="return confirm('确定删除这条质疑吗？站队票也会一起删掉。');">
+        <button type="submit">删除我的这条质疑</button>
+    </form>
+    {% endif %}
     <p><a href="/questions">← 返回大家的疑问</a></p>
 </div>
 {% include '_nav.html' %}

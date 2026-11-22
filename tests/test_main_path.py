@@ -206,6 +206,22 @@ try:
     check('再点一次撤回', '已撤回' in text(r) and '还没有人表态' in text(r))
     r = c.post('/verdict', data={'question_id': qid, 'verdict': '乱写'})
     check('乱写站队值不 500', r.status_code == 400)
+    check('提问人在站队页看到删除按钮', '删除我的这条质疑' in text(c.get(qloc)))
+    stranger = app.test_client()
+    stranger.post('/profile', data={'nickname': '旁观者', 'cookware': ['炒锅']})
+    check('别人看不到删除按钮', '删除我的这条质疑' not in text(stranger.get(qloc)))
+    stranger.post('/verdict', data={'question_id': qid, 'verdict': '质疑不对'})
+    r = stranger.post(f'/question/{qid}/delete')
+    check('别人删不了这条质疑', r.status_code == 403 and c.get(qloc).status_code == 200)
+    r = app.test_client().post(f'/question/{qid}/delete', follow_redirects=True)
+    check('没画像删不了', '请先保存厨房画像' in text(r) and c.get(qloc).status_code == 200)
+    r = c.post(f'/question/{qid}/delete', follow_redirects=True)
+    check('提问人能删自己的质疑', '质疑已删除' in text(r) and c.get(qloc).status_code == 404)
+    with sqlite3.connect(TEST_DB) as db:
+        left = db.execute('SELECT COUNT(*) FROM verdicts WHERE question_id = ?', (qid,)).fetchone()[0]
+    check('删质疑时站队票一起清掉', left == 0)
+    check('删掉后这道菜回到放心菜谱', '1' in recipe_links(text(c.get('/recipes'))))
+    check('再删一次不 500', c.post(f'/question/{qid}/delete').status_code == 302)
 
     print('10. 安全：XSS 与权限')
     xss = '<img src=x onerror=alert(1)>'
