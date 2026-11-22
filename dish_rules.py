@@ -137,7 +137,7 @@ COMMON_DISHES = {
 
 # 菜名里常见的食材字眼，兜底时用来猜主料（只认菜名里明明白白写着的）
 FOOD_WORDS = ['鸡翅', '鸡腿', '鸡胸', '鸡', '鸭', '鹅', '牛排', '牛肉', '牛腩', '羊肉', '排骨', '五花肉', '里脊', '猪肝', '猪肉',
-              '肉丝', '肉片', '鲈鱼', '鱼', '虾仁', '虾', '蟹', '鱿鱼', '豆腐', '鸡蛋', '蛋', '茄子', '土豆', '番茄', '西红柿',
+              '肉丝', '肉片', '鲈鱼', '鱼', '虾仁', '虾', '蟹', '鱿鱼', '豆腐', '鸡蛋', '蛋', '茄子', '胡萝卜', '玉米', '火腿', '青豆', '土豆', '番茄', '西红柿',
               '白菜', '青菜', '花菜', '西兰花', '黄瓜', '冬瓜', '南瓜', '蘑菇', '香菇', '木耳', '豆角', '青椒', '洋葱',
               '米饭', '饭', '面条', '意面', '面', '吐司', '年糕']
 
@@ -146,15 +146,24 @@ def _norm(name):
     return re.sub(r'\s+', '', name or '')
 
 
+# 菜名多出来的字只是这些修饰词时，才算同一道菜（「家常蛋炒饭」= 蛋炒饭）；
+# 多了食材（「胡萝卜鸡蛋炒饭」）就是另一道菜，不能直接套用，免得把胡萝卜丢掉
+SAME_DISH_EXTRA = re.compile(r'^(家常|简单|简易|快手|懒人|经典|正宗|自制|好吃的|美味|版|的|做法)*$')
+
+
+def _same_dish(known, d):
+    return known == d or (len(known) >= 3 and known in d and SAME_DISH_EXTRA.match(d.replace(known, '', 1)))
+
+
 def match_known(dish, known_recipes):
     # 先对站内 12 道菜（和用户上传的菜），再对常见菜资料；返回 (来源, 资料) 或 (None, None)
     d = _norm(dish)
     for r in known_recipes or []:
         rn = _norm(r.get('name'))
-        if rn and (rn == d or (len(rn) >= 3 and rn in d)):
+        if rn and _same_dish(rn, d):
             return 'site', r
     for name, info in COMMON_DISHES.items():
-        if name == d or (len(name) >= 3 and name in d):
+        if _same_dish(name, d):
             return 'common', dict(info, name=name)
     return None, None
 
@@ -228,10 +237,13 @@ def rule_draft(dish, description, known_recipes):
         methods = list(info['methods'])
         matched = f'稳厨经验库「{info["name"]}」'
     else:
-        main = []
-        for w in FOOD_WORDS:
-            if w in dish and not any(w in m for m in main):
-                main.append(w)
+        # 长词先认、认过的字划掉：「鸡蛋」不会再被拆出一个「鸡」；按菜名里的先后排
+        rest, found = dish, []
+        for w in sorted(FOOD_WORDS, key=len, reverse=True):
+            if w in rest:
+                found.append((dish.find(w), w))
+                rest = rest.replace(w, '\0' * len(w))
+        main = [w for _, w in sorted(found)]
         main, side, season = main[:3], [], []
         methods = methods_from_text(text)
         matched = ''
