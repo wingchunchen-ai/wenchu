@@ -759,7 +759,7 @@ SUGGEST_LABELS = {'site': '稳厨菜谱', 'cached': '查过', 'common': '经验�
 def ai_draft_provider(visitor, canon_name, canon_key, user_dish, description, personal, known_only, cands):
     # 给 dish_ai.analyze 用的「AI 初稿」：
     # 1) 没有个性化条件：先按标准名找存下的记录（免费、不占次数）
-    # 2) 选的是联想里的已有菜（known_only）：找不到记录也不调 AI，交给规则
+    # 2) 选的是联想里的经验库菜但还没存过做法：照常问 AI（经验库只有食材和做法类型，没有步骤），问完存下来
     # 3) 否则看限额 → 调 DeepSeek → 按 AI 给的标准名对齐：已有记录就复用并记下别名，没有才新存一条
     # 个性化条件（没有炒锅、吃素…）：带着说明单独问 AI，结果不存进菜谱库
     def provide(_dish, _description):
@@ -772,8 +772,6 @@ def ai_draft_provider(visitor, canon_name, canon_key, user_dish, description, pe
                     data = dish_ai.parse_ai_json(json.dumps(rec[2], ensure_ascii=False))  # 存的也再校验一遍
                     data['_cached'] = True
                     return data
-            if known_only:
-                raise dish_ai.AIError('选的是稳厨经验库里的菜，没调 AI')
             reason = dish_store.limit_reason(conn, visitor)
             if reason:
                 raise dish_ai.AIError(reason)
@@ -867,7 +865,7 @@ def dish_ai_page():
             result['dish'] = meta.get('deduped') or meta.get('canonical')
         result['personal'] = personal
         result['taste_note'] = description if description and not personal and not rules_only else ''
-        result['known_only'] = known_only
+        result['known_only'] = known_only and (result['mode'] != 'AI+规则' or result.get('cached'))  # 真调了 AI 就不说「没调 AI」
         if result.get('site_id'):  # 站内菜：步骤直接用菜谱里的
             conn = get_db()
             try:

@@ -441,8 +441,20 @@ try:
         r = c.get('/dish-ai/suggest?q=' + '炒饭').get_json()['items']
         check('联想接口：站内菜标「稳厨菜谱」', any(i['name'] == '蛋炒饭' and i['label'] == '稳厨菜谱' for i in r), r)
         check('联想接口：空的输入返回空列表', c.get('/dish-ai/suggest?q=').get_json() == {'items': []})
+        def fake_tomato(dish, desc):
+            calls.append(dish)
+            return dish_ai.AIReply(json.dumps({'recognized': True, 'canonical_name': '番茄炒蛋', 'main': ['番茄', '鸡蛋'],
+                'side': ['葱'], 'season': ['盐'], 'methods': ['炒'], 'cookware': [{'name': '炒锅', 'reason': '炒'}],
+                'tips': '先炒蛋', 'steps': ['鸡蛋打散', '炒蛋盛出', '炒番茄出汁', '倒回炒蛋']}, ensure_ascii=False), USAGE, 'deepseek-v4-flash')
+        dish_ai.call_deepseek = fake_tomato
         h = c.get('/dish-ai?known=1&dish=' + '番茄炒蛋', headers={'X-Forwarded-For': '8.1.1.1'}).get_data(as_text=True)
-        check('点联想里的经验库菜（没拆过）：零 AI，用经验库', calls == [] and '规则兜底' in h and '没调 AI' in h)
+        check('点联想里的经验库菜（没拆过）：会问 AI 拿到详细步骤，不显示「没调 AI」',
+              len(calls) == 1 and 'AI+规则' in h and '还没有详细步骤' not in h and '没调 AI' not in h)
+        calls.clear()
+        h = c.get('/dish-ai?known=1&dish=' + '番茄炒蛋', headers={'X-Forwarded-For': '8.1.1.2'}).get_data(as_text=True)
+        check('同一道经验库菜第二次点：用存下的结果，不再调 AI', calls == [] and '还没有详细步骤' not in h and '炒番茄出汁' in h)
+        calls.clear()
+        dish_ai.call_deepseek = fake_api
         h = c.get('/dish-ai?known=1&dish=' + '蛋炒饭').get_data(as_text=True)
         check('点联想里的站内菜：零 AI，用稳厨菜谱', calls == [] and '稳厨菜谱' in h)
 
@@ -462,7 +474,7 @@ try:
         n_rec = con.execute('SELECT COUNT(*) FROM dish_breakdowns').fetchone()[0]
         alias = con.execute("SELECT canonical_key, source, status FROM dish_aliases WHERE alias_key = '川味宫保鸡块'").fetchone()
         con.close()
-        check('AI 说新叫法的标准名是宫保鸡丁：调了 1 次 AI，但不新存记录', len(calls) == 1 and n_rec == 1)
+        check('AI 说新叫法的标准名是宫保鸡丁：调了 1 次 AI，但不新存记录', len(calls) == 1 and n_rec == 2)  # 2 = 宫保鸡丁 + 前面点经验库存下的番茄炒蛋
         check('新叫法记成别名，指向宫保鸡丁（来源 ai，待审核）', alias is not None and tuple(alias) == ('宫保鸡丁', 'ai', 'pending'))
         check('页面说明「稳厨之前问过，直接用那一份」、叫法待审核', '稳厨之前问过' in h and '宫保鸡丁' in h and '审核' in h)
         check('待审核的别名不进联想、不用来对齐', '川味宫保鸡块' not in dish_store.alias_map(db())
