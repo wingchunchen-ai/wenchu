@@ -218,7 +218,8 @@ def list_recipes(only_normal, base_path, title):
     try:
         recipes_list = [dict(r) for r in conn.execute(query, params).fetchall()]
         stats = vote_stats(conn)
-        categories = [r['category'] for r in conn.execute('SELECT category FROM cooking_categories ORDER BY template_id')]
+        categories = [r['category'] for r in conn.execute('SELECT category FROM cooking_categories ORDER BY template_id')
+                      if r['category'] not in HIDDEN_CATEGORIES]
         steps_of = {r['id']: conn.execute('SELECT tools FROM recipe_steps WHERE recipe_id = ?', (r['id'],)).fetchall()
                     for r in recipes_list}
     finally:
@@ -441,14 +442,16 @@ def recommend():  # 处理推荐页的函数
     hidden -= len(can_make) + len(cannot_make)
     return render_template('recommend.html', need_profile=False, can_make=can_make, cannot_make=cannot_make,
                            user_cookware=my_cookware, budget=budget, budgets=shop.BUDGETS, hidden=hidden, shop_cfg=catalog)
-def get_categories():
-    # 从数据库读 8 个分类，上传和编辑的下拉框用
+HIDDEN_CATEGORIES = {'一人食漂亮饭'}  # 不再给人选的分类：大多数菜都能算进去、区分不出东西；数据库里保留，老数据不受影响
+def get_categories(keep=None):
+    # 从数据库读分类，上传和编辑的下拉框用；keep = 这道菜原来的分类，编辑老菜时照样显示
     conn = get_db()
     try:
-        return conn.execute('SELECT template_id, category FROM cooking_categories ORDER BY template_id').fetchall()
+        return [r for r in conn.execute('SELECT template_id, category FROM cooking_categories ORDER BY template_id').fetchall()
+                if r['category'] not in HIDDEN_CATEGORIES or r['template_id'] == keep]
     finally:
         conn.close()
-def read_recipe_form():
+def read_recipe_form(keep=None):
     # 把上传 / 编辑表单读成 (菜的信息, 步骤列表, 出错原因列表)，两边共用一套检查
     f = request.form
     data = {
@@ -478,7 +481,7 @@ def read_recipe_form():
         errors.append('请填写菜名')
     elif len(data['name']) > 40:
         errors.append('菜名最多 40 个字')
-    valid_ids = [c['template_id'] for c in get_categories()]
+    valid_ids = [c['template_id'] for c in get_categories(keep)]
     if data['template_id'] not in valid_ids:
         errors.append('请选一个分类')
     if data['time_minutes']:
@@ -628,7 +631,7 @@ def edit_recipe(recipe_id):  # 函数
         if recipe['user_id'] != session['user_id']:  # 不是发布者本人
             return render_template('error.html', message='只有发布者能改这道菜。'), 403
         if request.method == 'POST':
-            data, steps, errors = read_recipe_form()
+            data, steps, errors = read_recipe_form(recipe['template_id'])
             image_path, image_error = (None, None)
             image_file, dropped_photo = consented_image()
             if not errors:
@@ -637,7 +640,7 @@ def edit_recipe(recipe_id):  # 函数
                 errors.append(image_error)
             if errors:
                 flash('没能保存：' + '；'.join(errors) + '。')
-                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories()), 400
+                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories(recipe['template_id'])), 400
             try:
                 conn.execute('''UPDATE recipes SET name = ?, description = ?, template_id = ?, summary_safety_tip = ?,
                     time_minutes = ?, ingredients_list = ?, tools_list = ?, image = COALESCE(?, image) WHERE id = ?''',
@@ -650,7 +653,7 @@ def edit_recipe(recipe_id):  # 函数
                 conn.rollback()
                 remove_image(image_path)
                 flash('没能保存：这个菜名已经存在，请换一个。')
-                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories()), 400
+                return render_template('edit.html', recipe=recipe, form=request.form, steps=steps, categories=get_categories(recipe['template_id'])), 400
             if image_path:
                 remove_image(recipe['image'])  # 换了新图，旧图删掉
             flash('修改已保存。' + ('你没勾「同意公开这张照片」，新照片没有保存。' if dropped_photo else ''))
@@ -660,7 +663,7 @@ def edit_recipe(recipe_id):  # 函数
         conn.close()
     form = dict(recipe)
     form['time_minutes'] = recipe['time_minutes'] or ''
-    return render_template('edit.html', recipe=recipe, form=form, steps=steps, categories=get_categories())
+    return render_template('edit.html', recipe=recipe, form=form, steps=steps, categories=get_categories(recipe['template_id']))
 @app.route('/daily_recommend')
 def daily_recommend():
     # 没登录或没填锅具，返回空列表加 need_profile 标记，让弹窗显示引导语

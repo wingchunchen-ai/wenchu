@@ -161,6 +161,10 @@ try:
     if img:
         check('图片网址能打开', c.get(img.group(1)).status_code == 200)
     check('上传者能看到编辑入口', f'/edit/{new_id}' in h)
+    check('逛菜谱的分类里不再有「一人食漂亮饭」', '一人食漂亮饭' not in text(c.get('/recipes')))
+    check('分享表单的分类下拉框里不再有「一人食漂亮饭」', '一人食漂亮饭' not in text(c.get('/upload')))
+    r = c.post('/upload', data={'name': '一人食测试', 'template_id': '1', 'step_action': ['炒']})
+    check('硬选「一人食漂亮饭」的分类会被拒绝', r.status_code == 400 and '请选一个分类' in text(r))
     r = c.get('/recipes?category=快手小炒')
     check('新菜出现在所选分类里', new_id in recipe_links(text(r)))
     r = c.get('/recipes?time=15分钟以内')
