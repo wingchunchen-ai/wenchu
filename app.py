@@ -115,6 +115,15 @@ app = Flask(__name__)#创建flask应用
 app.request_class = InMemoryRequest
 # 密钥：线上请在环境变量 SECRET_KEY 里设一个长的随机字符串；没设就用演示用的固定字符串
 app.secret_key = os.environ.get('SECRET_KEY', 'wenchu')
+# 画像记号存 30 天：手机把浏览器从后台划掉再打开，也还认得你（不然就删不了自己的质疑、改不了自己的菜）
+app.config['PERMANENT_SESSION_LIFETIME'] = 60 * 60 * 24 * 30
+
+
+@app.before_request
+def keep_session():
+    # 已经存过画像的老用户也一起改成 30 天，不用重新填
+    if 'user_id' in session and not session.permanent:
+        session.permanent = True
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 上传最大 5MB，再大就提示换小图
 ALLOWED_IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 HEIC_EXT = {'.heic', '.heif'}
@@ -417,6 +426,7 @@ def profile():  # 处理画像的函数
                 cursor = conn.execute('INSERT INTO users (nickname, cookware, avatar) VALUES (?, ?, ?)',
                                       (nickname, cookware_str, avatar))
                 session['user_id'] = cursor.lastrowid  # 把用户 id 写进 session，浏览器会记住
+                session.permanent = True  # 存 30 天，关掉浏览器也不丢
             conn.commit()
         except sqlite3.Error:
             flash('保存失败，请稍后再试。')
